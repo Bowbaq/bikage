@@ -2,8 +2,8 @@ package main
 
 import (
 	"flag"
-	"log"
 	"fmt"
+	"log"
 )
 
 var (
@@ -38,7 +38,7 @@ func main() {
 		total = total + dist
 	}
 
-	km_dist := float64(total)/1000
+	km_dist := float64(total) / 1000
 	mi_dist := km_dist * 0.621371192
 
 	fmt.Printf("Total distance: %.1f km (%.1f mi)\n", km_dist, mi_dist)
