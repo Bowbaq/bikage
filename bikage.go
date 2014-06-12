@@ -1,112 +1,42 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"log"
-	"net/http"
-	"net/http/cookiejar"
-	"net/url"
-	"strconv"
-	"time"
-
-	"github.com/PuerkitoBio/goquery"
+	"fmt"
 )
 
 var (
-	username = flag.String("u", "", "citibike.com username")
-	password = flag.String("p", "", "citibike.com password")
+	username       = flag.String("u", "", "citibike.com username")
+	password       = flag.String("p", "", "citibike.com password")
+	google_api_key = flag.String("k", "", "Google API key (directions API)")
 )
-
-type Station struct {
-	Id       string
-	Label    string
-	Lat, Lng float32
-}
-
-type Trip struct {
-	Id        string
-	StartId   string
-	StartTime time.Time
-	EndId     string
-	EndTime   time.Time
-}
 
 func main() {
 	flag.Parse()
 
-	var (
-		doc *goquery.Document
-		err error
-	)
+	distances := NewDistances(*google_api_key)
 
-	jar, err := cookiejar.New(nil)
+	stations, err := GetStations()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 
-	client := &http.Client{Jar: jar}
-
-	log.Println("Grabbing CSRF token")
-	resp, err := client.Get("https://www.citibikenyc.com/login")
+	user_trips, err := GetTrips(*username, *password, stations)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 
-	if doc, err = goquery.NewDocumentFromResponse(resp); err != nil {
-		log.Fatal(err)
+	var total uint64
+	for _, user_trip := range user_trips {
+		dist, err := distances.Get(user_trip.Trip)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+
+		total = total + dist
 	}
 
-	csrf, ok := doc.Find("#login-form .hidden input").Attr("value")
-	if !ok {
-		log.Fatal("couldn't find csrf token")
-	}
-
-	log.Println("Logging in")
-	resp, err = client.PostForm(
-		"https://www.citibikenyc.com/login",
-		url.Values{
-			"ci_csrf_token":      {csrf},
-			"subscriberUsername": {*username},
-			"subscriberPassword": {*password},
-			"login_submit":       {"Login"},
-		},
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-	resp.Body.Close()
-
-	log.Println("Navigating to the Trips page")
-	resp, err = client.Get("https://www.citibikenyc.com/member/trips")
-
-	if doc, err = goquery.NewDocumentFromResponse(resp); err != nil {
-		log.Fatal(err)
-	}
-
-	doc.Find("#tripTable .trip").Each(func(i int, tr *goquery.Selection) {
-		id, _ := tr.Attr("id")
-		start_id, _ := tr.Attr("data-start-station-id")
-		start_time, _ := parse_time(tr, "data-start-timestamp")
-		end_id, _ := tr.Attr("data-end-station-id")
-		end_time, _ := parse_time(tr, "data-end-timestamp")
-
-		trip := Trip{id, start_id, *start_time, end_id, *end_time}
-		log.Println(trip)
-	})
-}
-
-func parse_time(node *goquery.Selection, attr string) (*time.Time, error) {
-	time_str, ok := node.Attr(attr)
-	if !ok {
-		return nil, errors.New("attribute " + attr + " does not exist")
-	}
-
-	time_sec, err := strconv.ParseInt(time_str, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-
-	time := time.Unix(time_sec, 0)
-	return &time, nil
+	fmt.Println("Total distance:", float64(total)/1000, "km")
 }
