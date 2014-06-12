@@ -1,7 +1,7 @@
 bikage
 ======
 
-Approximate personal milage on a citi bike, since the dawn of time
+Approximate personal kilometrage on a citi bike, since the dawn of time
 
 Intall
 ------
