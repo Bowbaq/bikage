@@ -38,5 +38,8 @@ func main() {
 		total = total + dist
 	}
 
-	fmt.Println("Total distance:", float64(total)/1000, "km")
+	km_dist := float64(total)/1000
+	mi_dist := km_dist * 0.621371192
+
+	fmt.Printf("Total distance: %.1f km (%.1f mi)\n", km_dist, mi_dist)
 }
