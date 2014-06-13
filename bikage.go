@@ -3,18 +3,18 @@ package main
 import (
 	"flag"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
-	"html/template"
 
 	"github.com/gorilla/mux"
 )
 
 var (
-	username       = flag.String("u", "", "citibike.com username")
-	password       = flag.String("p", "", "citibike.com password")
+	username = flag.String("u", "", "citibike.com username")
+	password = flag.String("p", "", "citibike.com password")
 
-	http_port     = flag.String("http", "", "-http $PORT for HTTP server")
+	http_port = flag.String("http", "", "-http $PORT for HTTP server")
 
 	google_api_key = flag.String("k", "", "Google API key (directions API)")
 )
@@ -51,7 +51,7 @@ func main() {
 
 	router := mux.NewRouter()
 
-	router.HandleFunc("/", func(res http.ResponseWriter, req *http.Request){
+	router.HandleFunc("/", func(res http.ResponseWriter, req *http.Request) {
 		err := req.ParseForm()
 		if err != nil {
 			http.Error(res, "malformed request: "+err.Error(), http.StatusBadRequest)
@@ -63,19 +63,19 @@ func main() {
 			req.PostFormValue("password"),
 		}
 
-	  dist, err := compute_distance(creds, stations, distances)
-	  index.Execute(res, struct{Distance string}{dist.String()})
+		dist, err := compute_distance(creds, stations, distances)
+		index.Execute(res, struct{ Distance string }{dist.String()})
 	}).Methods("POST")
 
-	router.HandleFunc("/", func(res http.ResponseWriter, req *http.Request){
-		index.Execute(res, struct{Distance string}{})
+	router.HandleFunc("/", func(res http.ResponseWriter, req *http.Request) {
+		index.Execute(res, struct{ Distance string }{})
 	}).Methods("GET")
 
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./web/"))).Methods("GET")
 
-  http.Handle("/", router)
-  log.Println("Bikage listening on port", *http_port)
-  log.Fatal(http.ListenAndServe(":" + *http_port, nil))
+	http.Handle("/", router)
+	log.Println("Bikage listening on port", *http_port)
+	log.Fatal(http.ListenAndServe(":"+*http_port, nil))
 }
 
 func compute_distance(creds credentials, stations map[uint64]Station, distances *Distances) (distance, error) {
