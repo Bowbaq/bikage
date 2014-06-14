@@ -12,6 +12,7 @@ go get github.com/Bowbaq/bikage
 
 Usage
 -----
+You can use https://bikage.herokuapp.com/ or if you're more of a command line person, see below:
 
 ```bash
 # Username / password needed to retrieve list of trips
