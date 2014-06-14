@@ -16,15 +16,32 @@ var (
 	save_as = "./distances.json"
 )
 
-func NewDistances(api_key string) *Distances {
-	distances := &Distances{make(map[string]uint64), api_key}
-	distances.deserialize()
-
-	return distances
+type directionsResponse struct {
+	Routes []struct {
+		Legs []struct {
+			Distance struct {
+				Text  string
+				Value uint64
+			}
+		}
+	}
 }
 
-func (dist *Distances) Get(trip Trip) (uint64, error) {
-	if distance, ok := dist.cache[trip.Key()]; ok {
+func NewDistanceCache(api_key string) *DistanceCache {
+	cache := &DistanceCache{
+		cache:   make(map[string]uint64),
+		api_key: api_key,
+	}
+	cache.deserialize()
+
+	return cache
+}
+
+func (dist *DistanceCache) Get(trip Trip) (uint64, error) {
+	dist.RLock()
+	distance, ok := dist.cache[trip.Key()]
+	dist.RUnlock()
+	if ok {
 		return distance, nil
 	}
 
@@ -36,7 +53,7 @@ func (dist *Distances) Get(trip Trip) (uint64, error) {
 	return distance, nil
 }
 
-func (dist *Distances) Calculate(trip Trip) (uint64, error) {
+func (dist *DistanceCache) Calculate(trip Trip) (uint64, error) {
 	q := url.Values{}
 	q.Add("key", dist.api_key)
 	q.Add("origin", trip.From.String())
@@ -54,7 +71,7 @@ func (dist *Distances) Calculate(trip Trip) (uint64, error) {
 		return 0, err
 	}
 
-	var response DirectionsResponse
+	var response directionsResponse
 	if err := json.Unmarshal(data, &response); err != nil {
 		return 0, err
 	}
@@ -63,24 +80,29 @@ func (dist *Distances) Calculate(trip Trip) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-
+	dist.Lock()
 	dist.cache[trip.Key()] = distance
+	dist.Unlock()
+
 	dist.serialize()
 
 	return distance, nil
 }
 
-func (dist *Distances) deserialize() {
+func (dist *DistanceCache) deserialize() {
 	data, err := ioutil.ReadFile(save_as)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
+	dist.Lock()
 	json.Unmarshal(data, &dist.cache)
+	dist.Unlock()
 }
 
-func (dist *Distances) serialize() {
+func (dist *DistanceCache) serialize() {
+	dist.Lock()
 	data, err := json.MarshalIndent(dist.cache, "", "  ")
 	if err != nil {
 		log.Println(err)
@@ -91,6 +113,7 @@ func (dist *Distances) serialize() {
 	if err != nil {
 		log.Println(err)
 	}
+	dist.Unlock()
 }
 
 func (coord Coord) String() string {
@@ -101,7 +124,7 @@ func (trip Trip) Key() string {
 	return fmt.Sprintf("%d,%d", trip.From.Id, trip.To.Id)
 }
 
-func (response DirectionsResponse) Distance() (uint64, error) {
+func (response directionsResponse) Distance() (uint64, error) {
 	if len(response.Routes) > 0 {
 		route := response.Routes[0]
 		if len(route.Legs) > 0 {

@@ -6,7 +6,13 @@ import (
 	"net/http"
 )
 
-func GetStations() (map[uint64]Station, error) {
+type stationResponse struct {
+	Ok              bool
+	StationBeanList []Station
+	LastUpdate      int64
+}
+
+func GetStations() (Stations, error) {
 	resp, err := http.Get("http://www.citibikenyc.com/stations/json")
 	if err != nil {
 		return nil, err
@@ -18,12 +24,12 @@ func GetStations() (map[uint64]Station, error) {
 		return nil, err
 	}
 
-	var response StationResponse
+	var response stationResponse
 	if err := json.Unmarshal(data, &response); err != nil {
 		return nil, err
 	}
 
-	stations := make(map[uint64]Station)
+	stations := make(Stations)
 	for _, s := range response.StationBeanList {
 		if s.Status == 1 { // Active station
 			stations[s.Id] = s

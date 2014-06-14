@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync"
 	"time"
 )
 
@@ -16,6 +17,8 @@ type Station struct {
 	Coord
 }
 
+type Stations map[uint64]Station
+
 type Trip struct {
 	From Station
 	To   Station
@@ -27,24 +30,8 @@ type UserTrip struct {
 	EndedAt   time.Time
 }
 
-type Distances struct {
+type DistanceCache struct {
 	cache   map[string]uint64
 	api_key string
-}
-
-type StationResponse struct {
-	Ok              bool
-	StationBeanList []Station
-	LastUpdate      int64
-}
-
-type DirectionsResponse struct {
-	Routes []struct {
-		Legs []struct {
-			Distance struct {
-				Text  string
-				Value uint64
-			}
-		}
-	}
+	sync.RWMutex
 }

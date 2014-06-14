@@ -11,13 +11,17 @@ import (
 )
 
 var (
-	username = flag.String("u", "", "citibike.com username")
-	password = flag.String("p", "", "citibike.com password")
-
-	http_port = flag.String("http", "", "-http $PORT for HTTP server")
-
-	google_api_key = flag.String("k", "", "Google API key (directions API)")
+	bikage Bikage
 )
+
+type Bikage struct {
+	creds          credentials
+	http_port      string
+	google_api_key string
+
+	distance_cache *DistanceCache
+	stations       Stations
+}
 
 type credentials struct {
 	username, password string
@@ -27,31 +31,69 @@ type distance struct {
 	Km_dist, Mi_dist float64
 }
 
+func init() {
+	flag.StringVar(&bikage.creds.username, "u", "", "citibike.com username")
+	flag.StringVar(&bikage.creds.password, "p", "", "citibike.com password")
+	flag.StringVar(&bikage.http_port, "http", "", "-http $PORT for HTTP server")
+	flag.StringVar(&bikage.google_api_key, "k", "", "Google API key (directions API)")
+}
+
 func main() {
 	flag.Parse()
 
-	distances := NewDistances(*google_api_key)
+	bikage.Init()
+	bikage.Run()
+}
+
+func (bk *Bikage) Init() {
+	bk.distance_cache = NewDistanceCache(bk.google_api_key)
 
 	stations, err := GetStations()
 	if err != nil {
 		log.Fatalln(err)
 	}
+	bk.stations = stations
+}
 
-	if *http_port == "" {
-		dist, err := compute_distance(credentials{*username, *password}, stations, distances)
-		if err != nil {
-			log.Fatalln(err)
-		}
+func (bk *Bikage) Run() {
+	if bk.http_port == "" {
+		bk.CliRun()
+	} else {
+		bk.ServeHTTP()
+	}
+}
 
-		fmt.Println("Total distance:", dist.String())
-		return
+func (bk *Bikage) CliRun() {
+	dist, err := bk.compute_distance(bk.creds)
+	if err != nil {
+		log.Fatalln(err)
 	}
 
+	fmt.Println("Total distance:", dist.String())
+	return
+}
+
+func (bk *Bikage) ServeHTTP() {
 	index := template.Must(template.ParseFiles("./web/home.html"))
 
 	router := mux.NewRouter()
+	router.HandleFunc("/", bk.IndexHandler(index)).Methods("GET")
+	router.HandleFunc("/", bk.DistanceHandler(index)).Methods("POST")
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./web/"))).Methods("GET")
 
-	router.HandleFunc("/", func(res http.ResponseWriter, req *http.Request) {
+	http.Handle("/", router)
+	log.Println("Bikage listening on port", bk.http_port)
+	log.Fatal(http.ListenAndServe(":"+bk.http_port, nil))
+}
+
+func (bk *Bikage) IndexHandler(index *template.Template) func(http.ResponseWriter, *http.Request) {
+	return func(res http.ResponseWriter, req *http.Request) {
+		index.Execute(res, struct{ Distance string }{})
+	}
+}
+
+func (bk *Bikage) DistanceHandler(index *template.Template) func(http.ResponseWriter, *http.Request) {
+	return func(res http.ResponseWriter, req *http.Request) {
 		err := req.ParseForm()
 		if err != nil {
 			http.Error(res, "malformed request: "+err.Error(), http.StatusBadRequest)
@@ -63,30 +105,26 @@ func main() {
 			req.PostFormValue("password"),
 		}
 
-		dist, err := compute_distance(creds, stations, distances)
+		dist, err := bk.compute_distance(creds)
+		if err != nil {
+			http.Error(res, "error computing distance: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		index.Execute(res, struct{ Distance string }{dist.String()})
-	}).Methods("POST")
+	}
 
-	router.HandleFunc("/", func(res http.ResponseWriter, req *http.Request) {
-		index.Execute(res, struct{ Distance string }{})
-	}).Methods("GET")
-
-	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./web/"))).Methods("GET")
-
-	http.Handle("/", router)
-	log.Println("Bikage listening on port", *http_port)
-	log.Fatal(http.ListenAndServe(":"+*http_port, nil))
 }
 
-func compute_distance(creds credentials, stations map[uint64]Station, distances *Distances) (distance, error) {
-	user_trips, err := GetTrips(creds.username, creds.password, stations)
+func (bk *Bikage) compute_distance(creds credentials) (distance, error) {
+	user_trips, err := GetTrips(creds.username, creds.password, bk.stations)
 	if err != nil {
 		return distance{}, err
 	}
 
 	var total uint64
 	for _, user_trip := range user_trips {
-		dist, err := distances.Get(user_trip.Trip)
+		dist, err := bk.distance_cache.Get(user_trip.Trip)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -102,5 +140,5 @@ func compute_distance(creds credentials, stations map[uint64]Station, distances 
 }
 
 func (r distance) String() string {
-	return fmt.Sprintf("%.1f km (%.1f mi)\n", r.Km_dist, r.Mi_dist)
+	return fmt.Sprintf("%.1f km (%.1f mi)", r.Km_dist, r.Mi_dist)
 }
