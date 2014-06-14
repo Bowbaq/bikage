@@ -5,15 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 )
 
 var (
 	api_base = "https://maps.googleapis.com/maps/api/directions/json?"
-
-	save_as = "./distances.json"
 )
 
 type directionsResponse struct {
@@ -27,20 +24,15 @@ type directionsResponse struct {
 	}
 }
 
-func NewDistanceCache(api_key string) *DistanceCache {
-	cache := &DistanceCache{
-		cache:   make(map[string]uint64),
+func NewDistanceCache(api_key string, cache Cache) *DistanceCache {
+	return &DistanceCache{
+		cache:   cache,
 		api_key: api_key,
 	}
-	cache.deserialize()
-
-	return cache
 }
 
 func (dist *DistanceCache) Get(trip Trip) (uint64, error) {
-	dist.RLock()
-	distance, ok := dist.cache[trip.Key()]
-	dist.RUnlock()
+	distance, ok := dist.cache.Get(trip)
 	if ok {
 		return distance, nil
 	}
@@ -76,55 +68,21 @@ func (dist *DistanceCache) Calculate(trip Trip) (uint64, error) {
 		return 0, err
 	}
 
-	distance, err := response.Distance()
+	distance, err := response.distance()
 	if err != nil {
 		return 0, err
 	}
-	dist.Lock()
-	dist.cache[trip.Key()] = distance
-	dist.Unlock()
 
-	dist.serialize()
+	dist.cache.Put(trip, distance)
 
 	return distance, nil
-}
-
-func (dist *DistanceCache) deserialize() {
-	data, err := ioutil.ReadFile(save_as)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	dist.Lock()
-	json.Unmarshal(data, &dist.cache)
-	dist.Unlock()
-}
-
-func (dist *DistanceCache) serialize() {
-	dist.Lock()
-	data, err := json.MarshalIndent(dist.cache, "", "  ")
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	err = ioutil.WriteFile(save_as, data, 0755)
-	if err != nil {
-		log.Println(err)
-	}
-	dist.Unlock()
 }
 
 func (coord Coord) String() string {
 	return fmt.Sprintf("%.8f,%.8f", coord.Lat, coord.Lng)
 }
 
-func (trip Trip) Key() string {
-	return fmt.Sprintf("%d,%d", trip.From.Id, trip.To.Id)
-}
-
-func (response directionsResponse) Distance() (uint64, error) {
+func (response directionsResponse) distance() (uint64, error) {
 	if len(response.Routes) > 0 {
 		route := response.Routes[0]
 		if len(route.Legs) > 0 {

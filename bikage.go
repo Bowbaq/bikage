@@ -15,9 +15,11 @@ var (
 )
 
 type Bikage struct {
+	// CLI params
 	creds          credentials
 	http_port      string
 	google_api_key string
+	mongo_url      string
 
 	distance_cache *DistanceCache
 	stations       Stations
@@ -34,8 +36,11 @@ type distance struct {
 func init() {
 	flag.StringVar(&bikage.creds.username, "u", "", "citibike.com username")
 	flag.StringVar(&bikage.creds.password, "p", "", "citibike.com password")
+
 	flag.StringVar(&bikage.http_port, "http", "", "-http $PORT for HTTP server")
+
 	flag.StringVar(&bikage.google_api_key, "k", "", "Google API key (directions API)")
+	flag.StringVar(&bikage.mongo_url, "mgo", "", "MongoDB url (persistent distance cache)")
 }
 
 func main() {
@@ -46,11 +51,22 @@ func main() {
 }
 
 func (bk *Bikage) Init() {
-	bk.distance_cache = NewDistanceCache(bk.google_api_key)
+	if bk.mongo_url == "" {
+		bk.distance_cache = NewDistanceCache(bk.google_api_key, NewJsonCache())
+	} else {
+		var cache Cache
+
+		cache, err := NewMongoCache(bk.mongo_url)
+		if err != nil {
+			log.Println("Bikage CACHE error ->", err)
+			cache = NewJsonCache()
+		}
+		bk.distance_cache = NewDistanceCache(bk.google_api_key, cache)
+	}
 
 	stations, err := GetStations()
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalln("Bikage STATIONS GET error ->", err)
 	}
 	bk.stations = stations
 }
@@ -66,7 +82,7 @@ func (bk *Bikage) Run() {
 func (bk *Bikage) CliRun() {
 	dist, err := bk.compute_distance(bk.creds)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalln("Bikage CALC DISTANCE error ->", err)
 	}
 
 	fmt.Println("Total distance:", dist.String())
@@ -96,7 +112,7 @@ func (bk *Bikage) DistanceHandler(index *template.Template) func(http.ResponseWr
 	return func(res http.ResponseWriter, req *http.Request) {
 		err := req.ParseForm()
 		if err != nil {
-			http.Error(res, "malformed request: "+err.Error(), http.StatusBadRequest)
+			http.Error(res, "Bikage MALFORMED REQUEST error -> "+err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -107,7 +123,7 @@ func (bk *Bikage) DistanceHandler(index *template.Template) func(http.ResponseWr
 
 		dist, err := bk.compute_distance(creds)
 		if err != nil {
-			http.Error(res, "error computing distance: "+err.Error(), http.StatusInternalServerError)
+			http.Error(res, "Bikage CALC DISTANCE error -> "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -126,7 +142,7 @@ func (bk *Bikage) compute_distance(creds credentials) (distance, error) {
 	for _, user_trip := range user_trips {
 		dist, err := bk.distance_cache.Get(user_trip.Trip)
 		if err != nil {
-			log.Println(err)
+			log.Println("Bikage GET TRIP DISTANCE error -> ", err)
 			continue
 		}
 

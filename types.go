@@ -1,7 +1,6 @@
 package main
 
 import (
-	"sync"
 	"time"
 )
 
@@ -30,8 +29,12 @@ type UserTrip struct {
 	EndedAt   time.Time
 }
 
+type Cache interface {
+	Get(trip Trip) (uint64, bool)
+	Put(trip Trip, distance uint64)
+}
+
 type DistanceCache struct {
-	cache   map[string]uint64
+	cache   Cache
 	api_key string
-	sync.RWMutex
 }

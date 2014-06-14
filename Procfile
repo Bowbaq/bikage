@@ -1,1 +1,1 @@
-web: bikage -http=$PORT -k=$GOOGLE_APIKEY
+web: bikage -http=$PORT -k=$GOOGLE_APIKEY -mgo $MONGOHQ_URL
