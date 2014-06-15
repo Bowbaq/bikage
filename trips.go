@@ -7,11 +7,12 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+	"log"
 
 	"github.com/PuerkitoBio/goquery"
 )
 
-func GetTrips(username, password string, stations map[uint64]Station) ([]UserTrip, error) {
+func GetTrips(username, password string, stations Stations) ([]UserTrip, error) {
 	client, err := http_client()
 	if err != nil {
 		return nil, err
@@ -77,7 +78,7 @@ func login(client *http.Client, username, password, csrf string) error {
 	return nil
 }
 
-func get_trips(client *http.Client, stations map[uint64]Station) ([]UserTrip, error) {
+func get_trips(client *http.Client, stations Stations) ([]UserTrip, error) {
 	resp, err := client.Get("https://www.citibikenyc.com/member/trips")
 	if err != nil {
 		return nil, err
