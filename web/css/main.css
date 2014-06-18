@@ -12,6 +12,11 @@ body {
   margin-bottom: 30px;
 }
 
+.jumbotron .legend {
+  text-align: center;
+  font-size: 100%;
+}
+
 .form-control {
   border-radius: 2px;
 }
@@ -24,4 +29,8 @@ body {
 
 .btn-primary:hover, .btn-primary:active, .btn-primary:focus {
   color: #40C9F4;
+}
+
+#distances {
+  margin-left: -20px;
 }

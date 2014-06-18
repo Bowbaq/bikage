@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -31,6 +32,12 @@ type credentials struct {
 
 type distance struct {
 	Km_dist, Mi_dist float64
+}
+
+type data struct {
+	Distance       string
+	DailyDistances []float64
+	Days           []string
 }
 
 func init() {
@@ -80,7 +87,7 @@ func (bk *Bikage) Run() {
 }
 
 func (bk *Bikage) CliRun() {
-	dist, err := bk.compute_distance(bk.creds)
+	_, dist, err := bk.compute_distance(bk.creds)
 	if err != nil {
 		log.Fatalln("Bikage CALC DISTANCE error ->", err)
 	}
@@ -104,7 +111,7 @@ func (bk *Bikage) ServeHTTP() {
 
 func (bk *Bikage) IndexHandler(index *template.Template) func(http.ResponseWriter, *http.Request) {
 	return func(res http.ResponseWriter, req *http.Request) {
-		index.Execute(res, struct{ Distance string }{})
+		index.Execute(res, data{})
 	}
 }
 
@@ -121,29 +128,50 @@ func (bk *Bikage) DistanceHandler(index *template.Template) func(http.ResponseWr
 			req.PostFormValue("password"),
 		}
 
-		dist, err := bk.compute_distance(creds)
+		dist_by_day, dist, err := bk.compute_distance(creds)
 		if err != nil {
 			http.Error(res, "Bikage CALC DISTANCE error -> "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		index.Execute(res, struct{ Distance string }{dist.String()})
+		one_week_ago := time.Now().AddDate(0, 0, -6).Truncate(24 * time.Hour)
+		last_week_dists := make([]float64, 0)
+		last_week_days := make([]string, 0)
+
+		for day := one_week_ago; day.Before(time.Now()); day = day.AddDate(0, 0, 1) {
+			last_week_days = append(last_week_days, day.Format("Jan 02"))
+			if daily_dist, ok := dist_by_day[day]; ok {
+				last_week_dists = append(last_week_dists, float64(daily_dist)/1000)
+			} else {
+				last_week_dists = append(last_week_dists, 0)
+			}
+		}
+
+		index.Execute(res, data{dist.String(), last_week_dists, last_week_days})
 	}
 
 }
 
-func (bk *Bikage) compute_distance(creds credentials) (distance, error) {
+func (bk *Bikage) compute_distance(creds credentials) (map[time.Time]uint64, distance, error) {
 	user_trips, err := GetTrips(creds.username, creds.password, bk.stations)
 	if err != nil {
-		return distance{}, err
+		return nil, distance{}, err
 	}
 
 	var total uint64
+	var by_day = make(map[time.Time]uint64)
 	for _, user_trip := range user_trips {
 		dist, err := bk.distance_cache.Get(user_trip.Trip)
 		if err != nil {
 			log.Println("Bikage GET TRIP DISTANCE error -> ", err)
 			continue
+		}
+
+		day := user_trip.StartedAt.Truncate(24 * time.Hour)
+		if day_subtotal, ok := by_day[day]; ok {
+			by_day[day] = day_subtotal + dist
+		} else {
+			by_day[day] = dist
 		}
 
 		total = total + dist
@@ -152,7 +180,7 @@ func (bk *Bikage) compute_distance(creds credentials) (distance, error) {
 	km_dist := float64(total) / 1000
 	mi_dist := km_dist * 0.621371192
 
-	return distance{km_dist, mi_dist}, nil
+	return by_day, distance{km_dist, mi_dist}, nil
 }
 
 func (r distance) String() string {

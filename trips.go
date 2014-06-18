@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"strconv"
 	"time"
-	"log"
 
 	"github.com/PuerkitoBio/goquery"
 )
