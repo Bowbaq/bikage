@@ -11,6 +11,11 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
+const (
+	login_page = "https://www.citibikenyc.com/login"
+	trips_page = "https://www.citibikenyc.com/member/trips"
+)
+
 func GetTrips(username, password string, stations Stations) ([]UserTrip, error) {
 	client, err := http_client()
 	if err != nil {
@@ -27,7 +32,7 @@ func GetTrips(username, password string, stations Stations) ([]UserTrip, error) 
 		return nil, err
 	}
 
-	return get_trips(client, stations)
+	return get_trips(trips_page, client, stations)
 }
 
 func http_client() (*http.Client, error) {
@@ -40,7 +45,7 @@ func http_client() (*http.Client, error) {
 }
 
 func get_csrf_token(client *http.Client) (string, error) {
-	resp, err := client.Get("https://www.citibikenyc.com/login")
+	resp, err := client.Get(login_page)
 	if err != nil {
 		return "", err
 	}
@@ -60,15 +65,12 @@ func get_csrf_token(client *http.Client) (string, error) {
 }
 
 func login(client *http.Client, username, password, csrf string) error {
-	resp, err := client.PostForm(
-		"https://www.citibikenyc.com/login",
-		url.Values{
-			"ci_csrf_token":      {csrf},
-			"subscriberUsername": {username},
-			"subscriberPassword": {password},
-			"login_submit":       {"Login"},
-		},
-	)
+	resp, err := client.PostForm(login_page, url.Values{
+		"ci_csrf_token":      {csrf},
+		"subscriberUsername": {username},
+		"subscriberPassword": {password},
+		"login_submit":       {"Login"},
+	})
 	if err != nil {
 		return err
 	}
@@ -77,8 +79,8 @@ func login(client *http.Client, username, password, csrf string) error {
 	return nil
 }
 
-func get_trips(client *http.Client, stations Stations) ([]UserTrip, error) {
-	resp, err := client.Get("https://www.citibikenyc.com/member/trips")
+func get_trips(url string, client *http.Client, stations Stations) ([]UserTrip, error) {
+	resp, err := client.Get(url)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +121,21 @@ func get_trips(client *http.Client, stations Stations) ([]UserTrip, error) {
 		trips = append(trips, user_trip)
 	})
 
-	return trips, nil
+	nav := doc.Find("nav.pagination a").FilterFunction(func(i int, link *goquery.Selection) bool {
+		return link.Text() == ">"
+	})
+
+	if nav.Size() == 0 {
+		return trips, nil
+	}
+
+	next_page, ok := nav.Last().Attr("href")
+	if !ok {
+		return trips, nil
+	}
+
+	older_trips, err := get_trips(next_page, client, stations)
+	return append(older_trips, trips...), err
 }
 
 func parse_uint64(node *goquery.Selection, attr string) (uint64, error) {
