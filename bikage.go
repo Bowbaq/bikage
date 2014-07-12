@@ -158,12 +158,14 @@ func (bk *Bikage) compute_distance(creds credentials) (map[time.Time]uint64, dis
 		return nil, distance{}, err
 	}
 
+	user_trips_with_dist := bk.distance_cache.GetAll(user_trips)
+
 	var total uint64
 	var by_day = make(map[time.Time]uint64)
 	for _, user_trip := range user_trips {
-		dist, err := bk.distance_cache.Get(user_trip.Trip)
-		if err != nil {
-			log.Println("Bikage GET TRIP DISTANCE error -> ", err)
+		dist, ok := user_trips_with_dist[user_trip]
+		if !ok {
+			log.Println("Bikage GET TRIP DISTANCE error -> ", user_trip)
 			continue
 		}
 

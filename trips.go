@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -80,6 +81,7 @@ func login(client *http.Client, username, password, csrf string) error {
 }
 
 func get_trips(url string, client *http.Client, stations Stations) ([]UserTrip, error) {
+	log.Println(url)
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, err
