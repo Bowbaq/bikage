@@ -6,6 +6,15 @@ import (
 	"net/http"
 )
 
+type Station struct {
+	Id     uint64
+	Label  string `json:"stationName"`
+	Status int    `json:"statusKey"`
+	Coord
+}
+
+type Stations map[uint64]Station
+
 type stationResponse struct {
 	Ok              bool
 	StationBeanList []Station

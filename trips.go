@@ -17,6 +17,17 @@ const (
 	trips_page = "https://www.citibikenyc.com/member/trips"
 )
 
+type Trip struct {
+	From Station
+	To   Station
+}
+
+type UserTrip struct {
+	Trip
+	StartedAt time.Time
+	EndedAt   time.Time
+}
+
 func GetTrips(username, password string, stations Stations) ([]UserTrip, error) {
 	client, err := http_client()
 	if err != nil {
