@@ -1,22 +1,29 @@
 bikage
 ======
 
-Approximate personal distance covered on a citi bike
+Approximate personal distance covered on a Citi Bike
 
 Intall
 ------
 
 ```bash
+# For the library
 go get github.com/Bowbaq/bikage
+
+# For the cli client
+go install github.com/Bowbaq/bikage/cmd/bikage
 ```
+
+A web client is available at https://bikage.herokuapp.com/
 
 Usage
 -----
-You can use https://bikage.herokuapp.com/ or if you're more of a command line person, see below:
 
 ```bash
-# Username / password needed to retrieve list of trips
-# Google API key (with Directions API enabled) needed to
-# compute biking distance between stations
-bikage -u <citike username> -p <citibike password> -k <google API key>
+-> % bikage -help
+Usage of bikage:
+  -google-api-key="": Google API key, directions API must be enabled (required)
+  -mongo-url="": MongoDB url (persistent distance cache) (optional, defaults to local JSON cache)
+  -p="": citibike.com password (required)
+  -u="": citibike.com username (required)
 ```
