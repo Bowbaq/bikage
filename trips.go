@@ -1,8 +1,8 @@
-package main
+package bikage
 
 import (
 	"errors"
-	"log"
+	"fmt"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -22,13 +22,21 @@ type Trip struct {
 	To   Station
 }
 
+func (t Trip) String() string {
+	return fmt.Sprintf("%s -> %s", t.From, t.To)
+}
+
 type UserTrip struct {
 	Trip
 	StartedAt time.Time
 	EndedAt   time.Time
 }
 
-func GetTrips(username, password string, stations Stations) ([]UserTrip, error) {
+func (ut UserTrip) String() string {
+	return fmt.Sprintf("(%s, start: %s, end: %s)", ut.Trip, ut.StartedAt.Format("Jan 02, 15:04"), ut.EndedAt.Format("Jan 02, 15:04"))
+}
+
+func get_trips(username, password string, stations Stations) ([]UserTrip, error) {
 	client, err := http_client()
 	if err != nil {
 		return nil, err
@@ -44,7 +52,7 @@ func GetTrips(username, password string, stations Stations) ([]UserTrip, error) 
 		return nil, err
 	}
 
-	return get_trips(trips_page, client, stations)
+	return extract_trips(trips_page, client, stations)
 }
 
 func http_client() (*http.Client, error) {
@@ -91,8 +99,7 @@ func login(client *http.Client, username, password, csrf string) error {
 	return nil
 }
 
-func get_trips(url string, client *http.Client, stations Stations) ([]UserTrip, error) {
-	log.Println(url)
+func extract_trips(url string, client *http.Client, stations Stations) ([]UserTrip, error) {
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, err
@@ -147,7 +154,7 @@ func get_trips(url string, client *http.Client, stations Stations) ([]UserTrip, 
 		return trips, nil
 	}
 
-	older_trips, err := get_trips(next_page, client, stations)
+	older_trips, err := extract_trips(next_page, client, stations)
 	return append(older_trips, trips...), err
 }
 

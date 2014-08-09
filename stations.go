@@ -1,40 +1,41 @@
-package main
+package bikage
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
+
+	"github.com/Bowbaq/distance"
 )
+
+const stations_endpoint = "http://www.citibikenyc.com/stations/json"
 
 type Station struct {
 	Id     uint64
-	Label  string `json:"stationName"`
-	Status int    `json:"statusKey"`
-	Coord
+	Label  string  `json:"stationName"`
+	Status int     `json:"statusKey"`
+	Lat    float64 `json:"latitude"`
+	Lng    float64 `json:"longitude"`
+}
+
+func (s Station) String() string {
+	return s.Label
 }
 
 type Stations map[uint64]Station
 
-type stationResponse struct {
-	Ok              bool
+type stations_response struct {
 	StationBeanList []Station
-	LastUpdate      int64
 }
 
 func GetStations() (Stations, error) {
-	resp, err := http.Get("http://www.citibikenyc.com/stations/json")
+	resp, err := http.Get(stations_endpoint)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var response stationResponse
-	if err := json.Unmarshal(data, &response); err != nil {
+	var response stations_response
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, err
 	}
 
@@ -46,4 +47,11 @@ func GetStations() (Stations, error) {
 	}
 
 	return stations, nil
+}
+
+func (s Station) Coord() distance.Coord {
+	return distance.Coord{
+		Lat: s.Lat,
+		Lng: s.Lng,
+	}
 }

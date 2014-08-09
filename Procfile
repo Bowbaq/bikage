@@ -1,1 +1,0 @@
-web: GOMAXPROCS=4 bikage -http=$PORT -k=$GOOGLE_APIKEY -mgo $MONGOHQ_URL

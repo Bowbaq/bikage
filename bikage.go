@@ -1,190 +1,93 @@
-package main
+package bikage
 
 import (
-	"flag"
+	"errors"
 	"fmt"
-	"html/template"
 	"log"
-	"net/http"
+	"sort"
+	"strings"
 	"time"
-
-	"github.com/gorilla/mux"
-)
-
-var (
-	bikage Bikage
 )
 
 type Bikage struct {
-	// CLI params
-	creds          credentials
-	http_port      string
-	google_api_key string
-	mongo_url      string
-
 	distance_cache *DistanceCache
 	stations       Stations
 }
 
-type credentials struct {
-	username, password string
-}
-
-type distance struct {
-	Km_dist, Mi_dist float64
-}
-
-type data struct {
-	Distance       string
-	DailyDistances []float64
-	Days           []string
-}
-
-func init() {
-	flag.StringVar(&bikage.creds.username, "u", "", "citibike.com username")
-	flag.StringVar(&bikage.creds.password, "p", "", "citibike.com password")
-
-	flag.StringVar(&bikage.http_port, "http", "", "-http $PORT for HTTP server")
-
-	flag.StringVar(&bikage.google_api_key, "k", "", "Google API key (directions API)")
-	flag.StringVar(&bikage.mongo_url, "mgo", "", "MongoDB url (persistent distance cache)")
-}
-
-func main() {
-	flag.Parse()
-
-	bikage.Init()
-	bikage.Run()
-}
-
-func (bk *Bikage) Init() {
-	if bk.mongo_url == "" {
-		bk.distance_cache = NewDistanceCache(bk.google_api_key, NewJsonCache())
-	} else {
-		var cache Cache
-
-		cache, err := NewMongoCache(bk.mongo_url)
-		if err != nil {
-			log.Println("Bikage CACHE error ->", err)
-			cache = NewJsonCache()
-		}
-		bk.distance_cache = NewDistanceCache(bk.google_api_key, cache)
-	}
-
+func NewBikage(google_api_key string, cache Cache) (*Bikage, error) {
 	stations, err := GetStations()
 	if err != nil {
-		log.Fatalln("Bikage STATIONS GET error ->", err)
-	}
-	bk.stations = stations
-}
-
-func (bk *Bikage) Run() {
-	if bk.http_port == "" {
-		bk.CliRun()
-	} else {
-		bk.ServeHTTP()
-	}
-}
-
-func (bk *Bikage) CliRun() {
-	_, dist, err := bk.compute_distance(bk.creds)
-	if err != nil {
-		log.Fatalln("Bikage CALC DISTANCE error ->", err)
+		return nil, errors.New("Bikage STATIONS GET error -> " + err.Error())
 	}
 
-	fmt.Println("Total distance:", dist.String())
-	return
-}
-
-func (bk *Bikage) ServeHTTP() {
-	index := template.Must(template.ParseFiles("./web/home.html"))
-
-	router := mux.NewRouter()
-	router.HandleFunc("/", bk.IndexHandler(index)).Methods("GET")
-	router.HandleFunc("/", bk.DistanceHandler(index)).Methods("POST")
-	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./web/"))).Methods("GET")
-
-	http.Handle("/", router)
-	log.Println("Bikage listening on port", bk.http_port)
-	log.Fatal(http.ListenAndServe(":"+bk.http_port, nil))
-}
-
-func (bk *Bikage) IndexHandler(index *template.Template) func(http.ResponseWriter, *http.Request) {
-	return func(res http.ResponseWriter, req *http.Request) {
-		index.Execute(res, data{})
-	}
-}
-
-func (bk *Bikage) DistanceHandler(index *template.Template) func(http.ResponseWriter, *http.Request) {
-	return func(res http.ResponseWriter, req *http.Request) {
-		err := req.ParseForm()
-		if err != nil {
-			http.Error(res, "Bikage MALFORMED REQUEST error -> "+err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		creds := credentials{
-			req.PostFormValue("username"),
-			req.PostFormValue("password"),
-		}
-
-		dist_by_day, dist, err := bk.compute_distance(creds)
-		if err != nil {
-			http.Error(res, "Bikage CALC DISTANCE error -> "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		one_week_ago := time.Now().AddDate(0, 0, -6).Truncate(24 * time.Hour)
-		last_week_dists := make([]float64, 0)
-		last_week_days := make([]string, 0)
-
-		for day := one_week_ago; day.Before(time.Now()); day = day.AddDate(0, 0, 1) {
-			last_week_days = append(last_week_days, day.Format("Jan 02"))
-			if daily_dist, ok := dist_by_day[day]; ok {
-				last_week_dists = append(last_week_dists, float64(daily_dist)/1000)
-			} else {
-				last_week_dists = append(last_week_dists, 0)
-			}
-		}
-
-		index.Execute(res, data{dist.String(), last_week_dists, last_week_days})
+	bikage := Bikage{
+		distance_cache: NewDistanceCache(google_api_key, cache),
+		stations:       stations,
 	}
 
+	return &bikage, nil
 }
 
-func (bk *Bikage) compute_distance(creds credentials) (map[time.Time]uint64, distance, error) {
-	user_trips, err := GetTrips(creds.username, creds.password, bk.stations)
-	if err != nil {
-		return nil, distance{}, err
-	}
+func (bk *Bikage) GetTrips(username, password string) ([]UserTrip, error) {
+	return get_trips(username, password, bk.stations)
+}
 
-	user_trips_with_dist := bk.distance_cache.GetAll(user_trips)
+func (bk *Bikage) ComputeStats(trips []UserTrip) *Stats {
+	distances := bk.distance_cache.GetAll(trips)
 
-	var total uint64
-	var by_day = make(map[time.Time]uint64)
-	for _, user_trip := range user_trips {
-		dist, ok := user_trips_with_dist[user_trip]
+	stats := NewStats()
+	for _, trip := range trips {
+		dist, ok := distances[trip]
 		if !ok {
-			log.Println("Bikage GET TRIP DISTANCE error -> ", user_trip)
+			log.Println("Bikage GET TRIP DISTANCE error, trip:", trip)
 			continue
 		}
 
-		day := user_trip.StartedAt.Truncate(24 * time.Hour)
-		if day_subtotal, ok := by_day[day]; ok {
-			by_day[day] = day_subtotal + dist
+		day := trip.StartedAt.Truncate(24 * time.Hour)
+		if day_total, ok := stats.DailyTotal[day]; ok {
+			stats.DailyTotal[day] = day_total + dist
 		} else {
-			by_day[day] = dist
+			stats.DailyTotal[day] = dist
 		}
 
-		total = total + dist
+		stats.Total += dist
 	}
 
-	km_dist := float64(total) / 1000
-	mi_dist := km_dist * 0.621371192
-
-	return by_day, distance{km_dist, mi_dist}, nil
+	return stats
 }
 
-func (r distance) String() string {
-	return fmt.Sprintf("%.1f km (%.1f mi)", r.Km_dist, r.Mi_dist)
+type Stats struct {
+	Total      uint64
+	DailyTotal map[time.Time]uint64
+}
+
+func NewStats() *Stats {
+	return &Stats{DailyTotal: make(map[time.Time]uint64)}
+}
+
+func (s *Stats) TotalKm() float64 {
+	return km_dist(s.Total)
+}
+
+func (s *Stats) TotalMi() float64 {
+	return mi_dist(s.Total)
+}
+
+func (s Stats) String() string {
+	summaries := make([]string, 0)
+	for day, dist := range s.DailyTotal {
+		summary := fmt.Sprintf("  %s %.1f km (%.1f mi)", day.Format("01/02/2006"), km_dist(dist), mi_dist(dist))
+		summaries = append(summaries, summary)
+	}
+	sort.Strings(summaries)
+
+	return fmt.Sprintf("Total:\n  %.1f km (%.1f mi)\nDetails:\n%s", s.TotalKm(), s.TotalMi(), strings.Join(summaries, "\n"))
+}
+
+func km_dist(dist uint64) float64 {
+	return float64(dist) / 1000
+}
+
+func mi_dist(dist uint64) float64 {
+	return float64(dist) / 1000 * 0.621371192
 }
