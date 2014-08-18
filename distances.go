@@ -2,25 +2,25 @@ package bikage
 
 import "github.com/Bowbaq/distance"
 
-type DistanceCache struct {
+type RouteCache struct {
 	cache Cache
 	api   *distance.DirectionsAPI
 }
 
-func NewDistanceCache(api_key string, cache Cache) *DistanceCache {
-	return &DistanceCache{
+func NewRouteCache(api_key string, cache Cache) *RouteCache {
+	return &RouteCache{
 		cache: cache,
 		api:   distance.NewDirectionsAPI(api_key),
 	}
 }
 
-func (dist *DistanceCache) Get(trip UserTrip) (uint64, error) {
-	distance, ok := dist.cache.Get(trip.Trip)
+func (rc *RouteCache) Get(trip Trip) (uint64, error) {
+	distance, ok := rc.cache.GetDistance(trip.Route)
 	if ok {
 		return distance, nil
 	}
 
-	distance, err := dist.calculate(trip)
+	distance, err := rc.calculate(trip.Route)
 	if err != nil {
 		return 0, err
 	}
@@ -28,59 +28,59 @@ func (dist *DistanceCache) Get(trip UserTrip) (uint64, error) {
 	return distance, nil
 }
 
-func (dist *DistanceCache) GetAll(trips []UserTrip) map[UserTrip]uint64 {
-	result := make(map[UserTrip]uint64)
+func (rc *RouteCache) GetAll(trips Trips) map[Trip]uint64 {
+	result := make(map[Trip]uint64)
 
-	var misses []UserTrip
+	var misses Trips
 	for _, trip := range trips {
-		if distance, ok := dist.cache.Get(trip.Trip); ok {
+		if distance, ok := rc.cache.GetDistance(trip.Route); ok {
 			result[trip] = distance
 		} else {
 			misses = append(misses, trip)
 		}
 	}
 
-	for k, v := range dist.calculate_all(misses) {
+	for k, v := range rc.calculate_all(misses) {
 		result[k] = v
 	}
 
 	return result
 }
 
-func (dist *DistanceCache) calculate(trip UserTrip) (uint64, error) {
-	distance, err := dist.api.GetDistance(distance.Trip{
-		From: trip.From.Coord(),
-		To:   trip.To.Coord(),
+func (rc *RouteCache) calculate(route Route) (uint64, error) {
+	distance, err := rc.api.GetDistance(distance.Trip{
+		From: route.From.Coord(),
+		To:   route.To.Coord(),
 		Mode: distance.Bicycling,
 	})
 
 	if err == nil {
-		dist.cache.Put(trip.Trip, distance)
+		rc.cache.PutDistance(route, distance)
 	}
 
 	return distance, err
 }
 
-func (dist *DistanceCache) calculate_all(user_trips []UserTrip) map[UserTrip]uint64 {
-	trip_for_request := make(map[distance.Trip]UserTrip)
+func (rc *RouteCache) calculate_all(trips Trips) map[Trip]uint64 {
+	trip_for_request := make(map[distance.Trip]Trip)
 	var requests []distance.Trip
-	for _, trip := range user_trips {
+	for _, trip := range trips {
 		request := distance.Trip{
-			From: trip.From.Coord(),
-			To:   trip.To.Coord(),
+			From: trip.Route.From.Coord(),
+			To:   trip.Route.To.Coord(),
 			Mode: distance.Bicycling,
 		}
 		requests = append(requests, request)
 		trip_for_request[request] = trip
 	}
 
-	distances := dist.api.GetDistances(requests)
+	distances := rc.api.GetDistances(requests)
 
-	result := make(map[UserTrip]uint64)
+	result := make(map[Trip]uint64)
 	for request, distance := range distances {
-		user_trip := trip_for_request[request]
-		result[user_trip] = distance
-		dist.cache.Put(user_trip.Trip, distance)
+		trip := trip_for_request[request]
+		result[trip] = distance
+		rc.cache.PutDistance(trip.Route, distance)
 	}
 
 	return result

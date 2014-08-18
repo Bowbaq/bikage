@@ -10,8 +10,8 @@ import (
 )
 
 type Bikage struct {
-	distance_cache *DistanceCache
-	stations       Stations
+	route_cache *RouteCache
+	stations    Stations
 }
 
 func NewBikage(google_api_key string, cache Cache) (*Bikage, error) {
@@ -21,19 +21,19 @@ func NewBikage(google_api_key string, cache Cache) (*Bikage, error) {
 	}
 
 	bikage := Bikage{
-		distance_cache: NewDistanceCache(google_api_key, cache),
-		stations:       stations,
+		route_cache: NewRouteCache(google_api_key, cache),
+		stations:    stations,
 	}
 
 	return &bikage, nil
 }
 
-func (bk *Bikage) GetTrips(username, password string) ([]UserTrip, error) {
+func (bk *Bikage) GetTrips(username, password string) (Trips, error) {
 	return get_trips(username, password, bk.stations)
 }
 
-func (bk *Bikage) ComputeStats(trips []UserTrip) *Stats {
-	distances := bk.distance_cache.GetAll(trips)
+func (bk *Bikage) ComputeStats(trips Trips) *Stats {
+	distances := bk.route_cache.GetAll(trips)
 
 	stats := NewStats()
 	for _, trip := range trips {
@@ -69,8 +69,16 @@ func (s *Stats) TotalKm() float64 {
 	return km_dist(s.Total)
 }
 
+func km_dist(dist uint64) float64 {
+	return float64(dist) / 1000
+}
+
 func (s *Stats) TotalMi() float64 {
 	return mi_dist(s.Total)
+}
+
+func mi_dist(dist uint64) float64 {
+	return float64(dist) / 1000 * 0.621371192
 }
 
 func (s Stats) String() string {
@@ -79,15 +87,7 @@ func (s Stats) String() string {
 		summary := fmt.Sprintf("  %s %.1f km (%.1f mi)", day.Format("01/02/2006"), km_dist(dist), mi_dist(dist))
 		summaries = append(summaries, summary)
 	}
-	sort.Strings(summaries)
+	sort.Sort(sort.Reverse(sort.StringSlice(summaries)))
 
 	return fmt.Sprintf("Total:\n  %.1f km (%.1f mi)\nDetails:\n%s", s.TotalKm(), s.TotalMi(), strings.Join(summaries, "\n"))
-}
-
-func km_dist(dist uint64) float64 {
-	return float64(dist) / 1000
-}
-
-func mi_dist(dist uint64) float64 {
-	return float64(dist) / 1000 * 0.621371192
 }

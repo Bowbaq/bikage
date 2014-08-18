@@ -23,10 +23,6 @@ func (s Station) String() string {
 
 type Stations map[uint64]Station
 
-type stations_response struct {
-	StationBeanList []Station
-}
-
 func GetStations() (Stations, error) {
 	resp, err := http.Get(stations_endpoint)
 	if err != nil {
@@ -34,7 +30,9 @@ func GetStations() (Stations, error) {
 	}
 	defer resp.Body.Close()
 
-	var response stations_response
+	var response struct {
+		StationBeanList []Station
+	}
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, err
 	}

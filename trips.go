@@ -17,26 +17,33 @@ const (
 	trips_page = "https://www.citibikenyc.com/member/trips"
 )
 
-type Trip struct {
+type Route struct {
 	From Station
 	To   Station
 }
 
-func (t Trip) String() string {
-	return fmt.Sprintf("%s -> %s", t.From, t.To)
+func (r Route) String() string {
+	return fmt.Sprintf("%s -> %s", r.From, r.To)
 }
 
-type UserTrip struct {
-	Trip
+type Trip struct {
+	Route     Route
 	StartedAt time.Time
 	EndedAt   time.Time
 }
 
-func (ut UserTrip) String() string {
-	return fmt.Sprintf("(%s, start: %s, end: %s)", ut.Trip, ut.StartedAt.Format("Jan 02, 15:04"), ut.EndedAt.Format("Jan 02, 15:04"))
+type Trips []Trip
+
+func (t Trip) String() string {
+	return fmt.Sprintf(
+		"(%s, start: %s, end: %s)",
+		t.Route,
+		t.StartedAt.Format("Jan 02, 15:04"),
+		t.EndedAt.Format("Jan 02, 15:04"),
+	)
 }
 
-func get_trips(username, password string, stations Stations) ([]UserTrip, error) {
+func get_trips(username, password string, stations Stations) (Trips, error) {
 	client, err := http_client()
 	if err != nil {
 		return nil, err
@@ -99,7 +106,7 @@ func login(client *http.Client, username, password, csrf string) error {
 	return nil
 }
 
-func extract_trips(url string, client *http.Client, stations Stations) ([]UserTrip, error) {
+func extract_trips(url string, client *http.Client, stations Stations) (Trips, error) {
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, err
@@ -111,7 +118,7 @@ func extract_trips(url string, client *http.Client, stations Stations) ([]UserTr
 		return nil, err
 	}
 
-	var trips []UserTrip
+	var trips Trips
 	doc.Find("#tripTable .trip").Each(func(i int, tr *goquery.Selection) {
 		start_id, err := parse_uint64(tr, "data-start-station-id")
 		if err != nil {
@@ -125,7 +132,7 @@ func extract_trips(url string, client *http.Client, stations Stations) ([]UserTr
 		}
 		end_station := stations[end_id]
 
-		trip := Trip{start_station, end_station}
+		route := Route{start_station, end_station}
 
 		start_time, err := parse_time(tr, "data-start-timestamp")
 		if err != nil {
@@ -136,7 +143,7 @@ func extract_trips(url string, client *http.Client, stations Stations) ([]UserTr
 			return
 		}
 
-		user_trip := UserTrip{trip, *start_time, *end_time}
+		user_trip := Trip{route, *start_time, *end_time}
 
 		trips = append(trips, user_trip)
 	})

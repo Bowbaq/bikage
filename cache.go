@@ -3,8 +3,11 @@ package bikage
 import "log"
 
 type Cache interface {
-	Get(trip Trip) (uint64, bool)
-	Put(trip Trip, distance uint64)
+	GetDistance(route Route) (uint64, bool)
+	PutDistance(route Route, distance uint64)
+
+	GetTrip(username, id string) (Trip, bool)
+	PutTrip(trip Trip)
 }
 
 func NewCache(mongo_url string) Cache {

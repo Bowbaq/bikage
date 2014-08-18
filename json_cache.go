@@ -18,32 +18,38 @@ type JsonCache struct {
 }
 
 func NewJsonCache() *JsonCache {
-	cache := &JsonCache{cache: make(map[string]uint64)}
-	cache.deserialize()
-
-	return cache
-}
-
-func (c *JsonCache) Get(trip Trip) (uint64, bool) {
-	c.RLock()
-	dist, ok := c.cache[make_key(trip)]
-	c.RUnlock()
-
-	return dist, ok
-}
-
-func (c *JsonCache) Put(trip Trip, distance uint64) {
+	c := &JsonCache{cache: make(map[string]uint64)}
 	c.Lock()
-	c.cache[make_key(trip)] = distance
+	c.deserialize()
 	c.Unlock()
 
-	c.serialize()
+	return c
 }
 
-func (c *JsonCache) deserialize() {
-	c.Lock()
-	defer c.Unlock()
+func (c *JsonCache) GetDistance(route Route) (uint64, bool) {
+	c.RLock()
+	distance, ok := c.cache[make_key(route.From, route.To)]
+	c.RUnlock()
 
+	return distance, ok
+}
+
+func (c *JsonCache) PutDistance(route Route, distance uint64) {
+	c.Lock()
+
+	c.cache[make_key(route.From, route.To)] = distance
+	c.serialize()
+
+	c.Unlock()
+}
+
+func (c *JsonCache) GetTrip(username, id string) (Trip, bool) {
+	return Trip{}, false
+}
+
+func (c *JsonCache) PutTrip(trip Trip) {}
+
+func (c *JsonCache) deserialize() {
 	data, err := ioutil.ReadFile(cache_path)
 	if err != nil {
 		log.Println("JsonCache DESERIALIZE error ->", err)
@@ -54,9 +60,6 @@ func (c *JsonCache) deserialize() {
 }
 
 func (c *JsonCache) serialize() {
-	c.Lock()
-	defer c.Unlock()
-
 	data, err := json.MarshalIndent(c.cache, "", "  ")
 	if err != nil {
 		log.Println(err)
@@ -69,6 +72,6 @@ func (c *JsonCache) serialize() {
 	}
 }
 
-func make_key(trip Trip) string {
-	return fmt.Sprintf("%d,%d", trip.From.Id, trip.To.Id)
+func make_key(from, to Station) string {
+	return fmt.Sprintf("%d,%d", from.Id, to.Id)
 }
