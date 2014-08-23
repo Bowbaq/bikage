@@ -1,4 +1,4 @@
-bikage
+bikage [![wercker status](https://app.wercker.com/status/20b221082d05eeb5a9183cc3726942cc/s/master "wercker status")](https://app.wercker.com/project/bykey/20b221082d05eeb5a9183cc3726942cc)
 ======
 
 Approximate personal distance covered on a Citi Bike
