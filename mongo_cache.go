@@ -18,6 +18,24 @@ func NewMongoCache(mongo_url string) (*MongoCache, error) {
 	}
 	session.SetSafe(&mgo.Safe{})
 
+	username_index := mgo.Index{
+		Key:        []string{"Username"},
+		Unique:     false,
+		DropDups:   false,
+		Background: true,
+		Sparse:     true,
+	}
+	session.DB("").C("trips").EnsureIndex(username_index)
+
+	trip_id_index := mgo.Index{
+		Key:        []string{"Username", "Id"},
+		Unique:     true,
+		DropDups:   true,
+		Background: true,
+		Sparse:     true,
+	}
+	session.DB("").C("trips").EnsureIndex(trip_id_index)
+
 	return &MongoCache{session}, nil
 }
 
@@ -34,6 +52,20 @@ func NewCachedRoute(route Route, distance uint64) CachedRoute {
 		From:     route.From.Id,
 		To:       route.To.Id,
 		Distance: distance,
+	}
+}
+
+type CachedTrip struct {
+	MgoId    bson.ObjectId `bson:"_id"`
+	Username string
+	Trip
+}
+
+func NewCachedTrip(username string, trip Trip) CachedTrip {
+	return CachedTrip{
+		MgoId:    bson.NewObjectId(),
+		Username: username,
+		Trip:     trip,
 	}
 }
 
@@ -65,7 +97,51 @@ func (c *MongoCache) PutDistance(route Route, distance uint64) {
 }
 
 func (c *MongoCache) GetTrip(username, id string) (Trip, bool) {
-	return Trip{}, false
+	var cached CachedTrip
+
+	s := c.session.Clone()
+	defer s.Close()
+
+	query := bson.M{"Username": username, "Id": id}
+	err := s.DB("").C("trips").Find(query).One(&cached)
+
+	if err != nil {
+		log.Println("MongoCache: GET error -> ", err)
+		return Trip{}, false
+	}
+
+	return cached.Trip, true
 }
 
-func (c *MongoCache) PutTrip(trip Trip) {}
+func (c *MongoCache) GetTrips(username string) Trips {
+	var cached []CachedTrip
+
+	s := c.session.Clone()
+	defer s.Close()
+
+	query := bson.M{"Username": username}
+	err := s.DB("").C("trips").Find(query).All(&cached)
+
+	trips := make(Trips, 0)
+
+	if err != nil {
+		log.Println("MongoCache: GET error -> ", err)
+		return trips
+	}
+
+	for _, trip := range cached {
+		trips = append(trips, trip.Trip)
+	}
+
+	return trips
+}
+
+func (c *MongoCache) PutTrip(username string, trip Trip) {
+	s := c.session.Clone()
+	defer s.Close()
+
+	err := s.DB("").C("trips").Insert(NewCachedTrip(username, trip))
+	if err != nil {
+		log.Println("MongoCache: PUT error -> ", err)
+	}
+}

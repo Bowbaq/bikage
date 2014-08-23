@@ -7,7 +7,7 @@ type RouteCache struct {
 	api   *distance.DirectionsAPI
 }
 
-func NewRouteCache(api_key string, cache Cache) *RouteCache {
+func NewRouteCache(cache Cache, api_key string) *RouteCache {
 	return &RouteCache{
 		cache: cache,
 		api:   distance.NewDirectionsAPI(api_key),

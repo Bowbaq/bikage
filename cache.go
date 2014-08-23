@@ -7,7 +7,8 @@ type Cache interface {
 	PutDistance(route Route, distance uint64)
 
 	GetTrip(username, id string) (Trip, bool)
-	PutTrip(trip Trip)
+	GetTrips(username string) Trips
+	PutTrip(username string, trip Trip)
 }
 
 func NewCache(mongo_url string) Cache {

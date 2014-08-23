@@ -11,7 +11,7 @@ import (
 
 type Bikage struct {
 	route_cache *RouteCache
-	stations    Stations
+	trip_cache  *TripCache
 }
 
 func NewBikage(google_api_key string, cache Cache) (*Bikage, error) {
@@ -21,15 +21,15 @@ func NewBikage(google_api_key string, cache Cache) (*Bikage, error) {
 	}
 
 	bikage := Bikage{
-		route_cache: NewRouteCache(google_api_key, cache),
-		stations:    stations,
+		route_cache: NewRouteCache(cache, google_api_key),
+		trip_cache:  NewTripCache(cache, stations),
 	}
 
 	return &bikage, nil
 }
 
 func (bk *Bikage) GetTrips(username, password string) (Trips, error) {
-	return get_trips(username, password, bk.stations)
+	return bk.trip_cache.GetTrips(username, password)
 }
 
 func (bk *Bikage) ComputeStats(trips Trips) *Stats {
