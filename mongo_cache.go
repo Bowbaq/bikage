@@ -19,7 +19,7 @@ func NewMongoCache(mongo_url string) (*MongoCache, error) {
 	session.SetSafe(&mgo.Safe{})
 
 	username_index := mgo.Index{
-		Key:        []string{"Username"},
+		Key:        []string{"username"},
 		Unique:     false,
 		DropDups:   false,
 		Background: true,
@@ -28,7 +28,7 @@ func NewMongoCache(mongo_url string) (*MongoCache, error) {
 	session.DB("").C("trips").EnsureIndex(username_index)
 
 	trip_id_index := mgo.Index{
-		Key:        []string{"Username", "Id"},
+		Key:        []string{"username", "trip.id"},
 		Unique:     true,
 		DropDups:   true,
 		Background: true,
@@ -52,20 +52,6 @@ func NewCachedRoute(route Route, distance uint64) CachedRoute {
 		From:     route.From.Id,
 		To:       route.To.Id,
 		Distance: distance,
-	}
-}
-
-type CachedTrip struct {
-	MgoId    bson.ObjectId `bson:"_id"`
-	Username string
-	Trip
-}
-
-func NewCachedTrip(username string, trip Trip) CachedTrip {
-	return CachedTrip{
-		MgoId:    bson.NewObjectId(),
-		Username: username,
-		Trip:     trip,
 	}
 }
 
@@ -96,15 +82,27 @@ func (c *MongoCache) PutDistance(route Route, distance uint64) {
 	}
 }
 
-func (c *MongoCache) GetTrip(username, id string) (Trip, bool) {
-	return Trip{}, false
+type CachedTrip struct {
+	MgoId    bson.ObjectId `bson:"_id"`
+	Username string
+	Trip
+}
 
+func NewCachedTrip(username string, trip Trip) CachedTrip {
+	return CachedTrip{
+		MgoId:    bson.NewObjectId(),
+		Username: username,
+		Trip:     trip,
+	}
+}
+
+func (c *MongoCache) GetTrip(username, id string) (Trip, bool) {
 	var cached CachedTrip
 
 	s := c.session.Clone()
 	defer s.Close()
 
-	query := bson.M{"Username": username, "Id": id}
+	query := bson.M{"username": username, "trip.id": id}
 	err := s.DB("").C("trips").Find(query).One(&cached)
 
 	if err != nil {
@@ -116,14 +114,12 @@ func (c *MongoCache) GetTrip(username, id string) (Trip, bool) {
 }
 
 func (c *MongoCache) GetTrips(username string) Trips {
-	return Trips{}
-
 	var cached []CachedTrip
 
 	s := c.session.Clone()
 	defer s.Close()
 
-	query := bson.M{"Username": username}
+	query := bson.M{"username": username}
 	err := s.DB("").C("trips").Find(query).All(&cached)
 
 	trips := make(Trips, 0)
@@ -145,7 +141,7 @@ func (c *MongoCache) PutTrip(username string, trip Trip) {
 	defer s.Close()
 
 	err := s.DB("").C("trips").Insert(NewCachedTrip(username, trip))
-	if err != nil {
+	if err != nil && !mgo.IsDup(err) {
 		log.Println("MongoCache: PUT error -> ", err)
 	}
 }

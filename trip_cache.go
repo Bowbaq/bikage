@@ -35,49 +35,11 @@ func (tc *TripCache) GetTrips(username, password string) (Trips, error) {
 		return nil, err
 	}
 
-	cached_trips := tc.cache.GetTrips(username)
+	return citibike.get_all_trips(username, tc.cache, tc.stations)
+}
 
-	if len(cached_trips) == 0 {
-		return citibike.get_all_trips(username, tc.cache, tc.stations)
-	}
-
-	last_cached_trip := cached_trips[len(cached_trips)-1]
-
-	var fetch func(string) (Trips, error)
-	fetch = func(page string) (Trips, error) {
-		fetched_trips := make(Trips, 0)
-
-		trips, next_page, err := citibike.get_trips(page, tc.stations)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, trip := range trips {
-			if trip.Id == last_cached_trip.Id {
-				return fetched_trips, nil
-			}
-
-			tc.cache.PutTrip(username, trip)
-			fetched_trips = append(fetched_trips, trip)
-		}
-
-		if next_page != "" {
-			next_trips, err := fetch(next_page)
-			return append(fetched_trips, next_trips...), err
-		}
-
-		return fetched_trips, nil
-	}
-
-	new_trips, err := fetch(trips_page)
-	if err != nil {
-		return nil, err
-	}
-
-	cached_trips = append(cached_trips, new_trips...)
-	sort.Sort(cached_trips)
-
-	return cached_trips, nil
+func (tc *TripCache) GetCachedTrips(username string) Trips {
+	return tc.cache.GetTrips(username)
 }
 
 type citibike struct {

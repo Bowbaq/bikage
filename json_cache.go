@@ -51,8 +51,6 @@ func (c *JsonCache) PutDistance(route Route, distance uint64) {
 }
 
 func (c *JsonCache) GetTrip(username, id string) (Trip, bool) {
-	return Trip{}, false
-
 	user_trips, hit := c.trips[username]
 	if !hit {
 		return Trip{}, false
@@ -64,8 +62,6 @@ func (c *JsonCache) GetTrip(username, id string) (Trip, bool) {
 }
 
 func (c *JsonCache) GetTrips(username string) Trips {
-	return Trips{}
-
 	trips := make(Trips, 0)
 
 	user_trips, hit := c.trips[username]

@@ -33,6 +33,10 @@ func (bk *Bikage) GetTrips(username, password string) (Trips, error) {
 	return bk.trip_cache.GetTrips(username, password)
 }
 
+func (bk *Bikage) GetCachedTrips(username string) Trips {
+	return bk.trip_cache.GetCachedTrips(username)
+}
+
 func (bk *Bikage) ComputeStats(trips Trips) *Stats {
 	distances := bk.route_cache.GetAll(trips)
 
