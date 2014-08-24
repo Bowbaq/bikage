@@ -39,7 +39,7 @@ func (bk *Bikage) ComputeStats(trips Trips) *Stats {
 	for _, trip := range trips {
 		dist, ok := distances[trip]
 		if !ok {
-			log.Println("Bikage GET TRIP DISTANCE error, trip:", trip)
+			log.Println("Bikage COULDN'T COMPUTE DISTANCE FOR ROUTE error, trip:", trip)
 			continue
 		}
 
