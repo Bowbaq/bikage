@@ -6,13 +6,14 @@ import (
 	"log"
 	"sort"
 	"strings"
-	"time"
 )
 
 type Bikage struct {
 	route_cache *RouteCache
 	trip_cache  *TripCache
 }
+
+const DayFormat = "01/02/2006"
 
 func NewBikage(google_api_key string, cache Cache) (*Bikage, error) {
 	stations, err := GetStations()
@@ -43,7 +44,7 @@ func (bk *Bikage) ComputeStats(trips Trips) *Stats {
 			continue
 		}
 
-		day := trip.StartedAt.Truncate(24 * time.Hour)
+		day := trip.StartedAt.Format(DayFormat)
 		if day_total, ok := stats.DailyTotal[day]; ok {
 			stats.DailyTotal[day] = day_total + dist
 		} else {
@@ -58,11 +59,11 @@ func (bk *Bikage) ComputeStats(trips Trips) *Stats {
 
 type Stats struct {
 	Total      uint64
-	DailyTotal map[time.Time]uint64
+	DailyTotal map[string]uint64
 }
 
 func NewStats() *Stats {
-	return &Stats{DailyTotal: make(map[time.Time]uint64)}
+	return &Stats{DailyTotal: make(map[string]uint64)}
 }
 
 func (s *Stats) TotalKm() float64 {
@@ -84,7 +85,7 @@ func mi_dist(dist uint64) float64 {
 func (s Stats) String() string {
 	summaries := make([]string, 0)
 	for day, dist := range s.DailyTotal {
-		summary := fmt.Sprintf("  %s %.1f km (%.1f mi)", day.Format("01/02/2006"), km_dist(dist), mi_dist(dist))
+		summary := fmt.Sprintf("  %s %.1f km (%.1f mi)", day, km_dist(dist), mi_dist(dist))
 		summaries = append(summaries, summary)
 	}
 	sort.Sort(sort.Reverse(sort.StringSlice(summaries)))
