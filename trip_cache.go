@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -214,7 +215,13 @@ func parse_station(node *goquery.Selection, stations Stations, id_attr string) (
 
 	station, found := stations[id]
 	if !found {
-		return Station{}, fmt.Errorf("Unknown station id: %d, %s", id, node.Text())
+		index := 1
+		if strings.Contains(id_attr, "end") {
+			index += 2
+		}
+		missing := node.Children().Eq(index).Text()
+
+		return Station{}, fmt.Errorf("Unknown station id: %d, %s", id, missing)
 	}
 
 	return station, nil
