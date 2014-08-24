@@ -97,6 +97,8 @@ func (c *MongoCache) PutDistance(route Route, distance uint64) {
 }
 
 func (c *MongoCache) GetTrip(username, id string) (Trip, bool) {
+	return Trip{}, false
+
 	var cached CachedTrip
 
 	s := c.session.Clone()
@@ -114,6 +116,8 @@ func (c *MongoCache) GetTrip(username, id string) (Trip, bool) {
 }
 
 func (c *MongoCache) GetTrips(username string) Trips {
+	return Trips{}
+
 	var cached []CachedTrip
 
 	s := c.session.Clone()
