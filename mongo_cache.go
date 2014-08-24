@@ -65,7 +65,7 @@ func (c *MongoCache) GetDistance(route Route) (uint64, bool) {
 	err := s.DB("").C("routes").Find(query).One(&cached)
 
 	if err != nil {
-		log.Println("MongoCache: GET error -> ", err)
+		log.Println("MongoCache: GET error -> ", query, err)
 		return 0, false
 	}
 
@@ -77,7 +77,7 @@ func (c *MongoCache) PutDistance(route Route, distance uint64) {
 	defer s.Close()
 
 	err := s.DB("").C("routes").Insert(NewCachedRoute(route, distance))
-	if err != nil {
+	if err != nil && !mgo.IsDup(err) {
 		log.Println("MongoCache: PUT error -> ", err)
 	}
 }
@@ -106,7 +106,7 @@ func (c *MongoCache) GetTrip(username, id string) (Trip, bool) {
 	err := s.DB("").C("trips").Find(query).One(&cached)
 
 	if err != nil {
-		log.Println("MongoCache: GET error -> ", err)
+		log.Println("MongoCache: GET error -> ", query, err)
 		return Trip{}, false
 	}
 
@@ -125,7 +125,7 @@ func (c *MongoCache) GetTrips(username string) Trips {
 	trips := make(Trips, 0)
 
 	if err != nil {
-		log.Println("MongoCache: GET error -> ", err)
+		log.Println("MongoCache: GET error -> ", query, err)
 		return trips
 	}
 
