@@ -2,6 +2,8 @@ package bikage
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -127,17 +129,17 @@ func (cb *citibike) get_trips(url string, stations Stations) (Trips, string, err
 			return
 		}
 
-		start_id, err := parse_uint64(tr, "data-start-station-id")
+		start_station, err := parse_station(tr, stations, "data-start-station-id")
 		if err != nil {
+			log.Println("COULDN'T PARSE STATION", err)
 			return
 		}
-		start_station := stations[start_id]
 
-		end_id, err := parse_uint64(tr, "data-end-station-id")
+		end_station, err := parse_station(tr, stations, "data-end-station-id")
 		if err != nil {
+			log.Println("COULDN'T PARSE STATION", err)
 			return
 		}
-		end_station := stations[end_id]
 
 		start_time, err := parse_time(tr, "data-start-timestamp")
 		if err != nil {
@@ -202,6 +204,20 @@ func (cb *citibike) get_all_trips(username string, cache Cache, stations Station
 	sort.Sort(trips)
 
 	return trips, err
+}
+
+func parse_station(node *goquery.Selection, stations Stations, id_attr string) (Station, error) {
+	id, err := parse_uint64(node, id_attr)
+	if err != nil {
+		return Station{}, err
+	}
+
+	station, found := stations[id]
+	if !found {
+		return Station{}, fmt.Errorf("Unknown station id: %d, %s", id, node.Text())
+	}
+
+	return station, nil
 }
 
 func parse_uint64(node *goquery.Selection, attr string) (uint64, error) {
