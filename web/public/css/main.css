@@ -1,0 +1,36 @@
+body {
+  background: #005dab;
+  color: #fff;
+}
+
+.jumbotron {
+  background: transparent;
+  margin-top: 60px;
+}
+
+.jumbotron .lead {
+  margin-bottom: 30px;
+}
+
+.jumbotron .legend {
+  text-align: center;
+  font-size: 100%;
+}
+
+.form-control {
+  border-radius: 2px;
+}
+
+.btn-primary, .btn-primary:hover, .btn-primary:active, .btn-primary:focus {
+  background-color: #003B7F;
+  border-color: #002f66;
+  border-radius: 2px;
+}
+
+.btn-primary:hover, .btn-primary:active, .btn-primary:focus {
+  color: #40C9F4;
+}
+
+#distances {
+  margin-left: -20px;
+}
