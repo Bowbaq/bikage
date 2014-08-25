@@ -1,0 +1,1 @@
+web: cd bikage-web && GOMAXPROCS=4 bikage-web

@@ -1,4 +1,4 @@
-package bikage_web
+package main
 
 import (
 	"os"
