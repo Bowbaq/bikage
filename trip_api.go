@@ -20,19 +20,31 @@ const (
 	trips_page = "https://www.citibikenyc.com/member/trips"
 )
 
-type TripCache struct {
-	cache    Cache
+type TripAPI interface {
+	WithCache(cache TripCache) TripAPI
+
+	GetTrips(username, password string) (Trips, error)
+	GetCachedTrips(username string) Trips
+}
+
+type trip_api struct {
+	cache    TripCache
 	stations Stations
 }
 
-func NewTripCache(cache Cache, stations Stations) *TripCache {
-	return &TripCache{
-		cache:    cache,
+func NewTripAPI(stations Stations) TripAPI {
+	return &trip_api{
+		cache:    new(NoopCache),
 		stations: stations,
 	}
 }
 
-func (tc *TripCache) GetTrips(username, password string) (Trips, error) {
+func (ta *trip_api) WithCache(cache TripCache) TripAPI {
+	ta.cache = cache
+	return ta
+}
+
+func (tc *trip_api) GetTrips(username, password string) (Trips, error) {
 	citibike, err := new_citibike(username, password)
 	if err != nil {
 		return nil, err
@@ -41,7 +53,7 @@ func (tc *TripCache) GetTrips(username, password string) (Trips, error) {
 	return citibike.get_all_trips(username, tc.cache, tc.stations)
 }
 
-func (tc *TripCache) GetCachedTrips(username string) Trips {
+func (tc *trip_api) GetCachedTrips(username string) Trips {
 	return tc.cache.GetTrips(username)
 }
 
@@ -181,7 +193,7 @@ func (cb *citibike) get_trips(url string, stations Stations) (Trips, string, err
 	return trips, next_page, nil
 }
 
-func (cb *citibike) get_all_trips(username string, cache Cache, stations Stations) (Trips, error) {
+func (cb *citibike) get_all_trips(username string, cache TripCache, stations Stations) (Trips, error) {
 	var fetch func(string) (Trips, error)
 	fetch = func(page string) (Trips, error) {
 		trips, next_page, err := cb.get_trips(page, stations)

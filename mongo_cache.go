@@ -1,6 +1,7 @@
 package bikage
 
 import (
+	"errors"
 	"log"
 
 	"labix.org/v2/mgo"
@@ -12,6 +13,10 @@ type MongoCache struct {
 }
 
 func NewMongoCache(mongo_url string) (*MongoCache, error) {
+	if mongo_url == "" {
+		return nil, errors.New("mongo url is empty")
+	}
+
 	session, err := mgo.Dial(mongo_url)
 	if err != nil {
 		return nil, err

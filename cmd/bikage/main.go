@@ -33,7 +33,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	bikage, err := bikage.NewBikage(google_api_key, bikage.NewCache(mongo_url))
+	bikage, err := bikage.NewBikage(google_api_key, mongo_url)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -43,7 +43,5 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	stats := bikage.ComputeStats(trips)
-
-	fmt.Println(stats)
+	fmt.Println(bikage.ComputeStats(trips))
 }

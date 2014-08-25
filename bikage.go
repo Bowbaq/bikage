@@ -6,39 +6,49 @@ import (
 	"log"
 	"sort"
 	"strings"
+
+	"github.com/Bowbaq/distance"
 )
 
 type Bikage struct {
-	route_cache *RouteCache
-	trip_cache  *TripCache
+	RouteAPI RouteAPI
+	TripAPI  TripAPI
 }
 
 const DayFormat = "01/02/2006"
 
-func NewBikage(google_api_key string, cache Cache) (*Bikage, error) {
+func NewBikage(google_api_key string, mongo_url string) (*Bikage, error) {
 	stations, err := GetStations()
 	if err != nil {
 		return nil, errors.New("Bikage STATIONS GET error -> " + err.Error())
 	}
 
+	var cache Cache
+	cache, err = NewMongoCache(mongo_url)
+	if err != nil {
+		cache = NewJsonCache()
+	}
+
+	directions_api := distance.NewDirectionsAPI(google_api_key)
+
 	bikage := Bikage{
-		route_cache: NewRouteCache(cache, google_api_key),
-		trip_cache:  NewTripCache(cache, stations),
+		RouteAPI: NewRouteAPI(directions_api).WithCache(cache),
+		TripAPI:  NewTripAPI(stations).WithCache(cache),
 	}
 
 	return &bikage, nil
 }
 
 func (bk *Bikage) GetTrips(username, password string) (Trips, error) {
-	return bk.trip_cache.GetTrips(username, password)
+	return bk.TripAPI.GetTrips(username, password)
 }
 
 func (bk *Bikage) GetCachedTrips(username string) Trips {
-	return bk.trip_cache.GetCachedTrips(username)
+	return bk.TripAPI.GetCachedTrips(username)
 }
 
 func (bk *Bikage) ComputeStats(trips Trips) *Stats {
-	distances := bk.route_cache.GetAll(trips)
+	distances := bk.RouteAPI.GetAll(trips)
 
 	stats := NewStats()
 	for _, trip := range trips {
@@ -83,7 +93,7 @@ func (s *Stats) TotalMi() float64 {
 }
 
 func mi_dist(dist uint64) float64 {
-	return float64(dist) / 1000 * 0.621371192
+	return float64(dist) / 1609.34
 }
 
 func (s Stats) String() string {
