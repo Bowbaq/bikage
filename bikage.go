@@ -6,6 +6,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Bowbaq/distance"
 )
@@ -66,14 +67,19 @@ func (bk *Bikage) ComputeStats(trips Trips) *Stats {
 		}
 
 		stats.Total += dist
+		stats.TotalTime += trip.Duration()
 	}
+
+	stats.AvgSpeed = stats.TotalKm() / stats.TotalTime.Hours()
 
 	return stats
 }
 
 type Stats struct {
 	Total      uint64
+	TotalTime  time.Duration
 	DailyTotal map[string]uint64
+	AvgSpeed   float64
 }
 
 func NewStats() *Stats {

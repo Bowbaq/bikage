@@ -35,3 +35,18 @@ func (t Trip) String() string {
 		t.EndedAt.Format("Jan 02, 15:04"),
 	)
 }
+
+func (t Trip) Duration() time.Duration {
+	return t.EndedAt.Sub(t.StartedAt)
+}
+
+func (t Trip) Speed(dist uint64) float64 {
+	km := float64(dist) / 1000.0
+	hrs := t.Duration().Hours()
+
+	if hrs != 0.0 {
+		return km / hrs
+	}
+
+	return 0.0
+}

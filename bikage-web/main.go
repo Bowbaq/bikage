@@ -92,10 +92,12 @@ func (s *server) StatsAPI(req *http.Request, r render.Render, creds credentials)
 
 	data := struct {
 		Distance       string
+		Speed          string
 		DailyDistances []float64
 		Days           []string
 	}{
 		Distance:       fmt.Sprintf("%.1f km (%.1f mi)", stats.TotalKm(), stats.TotalMi()),
+		Speed:          fmt.Sprintf("%.1f km/h (%.1f mph)", stats.AvgSpeed, stats.AvgSpeed/1.60934),
 		DailyDistances: last_week_dists,
 		Days:           last_week_days,
 	}

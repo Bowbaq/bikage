@@ -41,6 +41,7 @@
 
           <div id="display" style="display: none;">
             <p id="total"></p>
+            <p id="speed"></p>
             <canvas id="distances" width="660" height="400"></canvas>
             <p class="legend"><i>Distance by day (km)</i></p>
           </div>
@@ -61,6 +62,7 @@
           var $display = $("#display");
           var $loading = $("#loading")
           var $total = $("#total");
+          var $speed = $("#speed");
           var $canvas = document.getElementById("distances");
           var ctx = $canvas.getContext("2d");
 
@@ -70,45 +72,51 @@
             scaleBeginAtZero: true
           };
 
-          $login.submit(function(e){
-            e.preventDefault();
+          function create_chart(distances, days){
+            var data = {
+              labels: days,
+              datasets: [
+                {
+                  fillColor: "rgba(220,220,220,0.5)",
+                  strokeColor: "rgba(220,220,220,1)",
+                  pointColor: "rgba(220,220,220,1)",
+                  pointStrokeColor: "#fff",
+                  data: distances
+                }
+              ]
+            };
+            new Chart(ctx).Bar(data, options);
+          }
 
-            $.ajax("/api/stats?cached=true", {
+          function load_data(cached) {
+            var url = "/api/stats"
+            if(cached) { url += "?cached=true"; }
+
+            return $.ajax(url, {
               type: "POST",
               dataType: 'json',
               data: JSON.stringify({Username: $username.val(), Password: $password.val()})
-            }).done(function(stats){
-              $total.text("You have covered " + stats.Distance + " on your Citi Bike.");
+            });
+          }
 
-              var data = {
-                labels: stats.Days,
-                datasets: [
-                  {
-                    fillColor: "rgba(220,220,220,0.5)",
-                    strokeColor: "rgba(220,220,220,1)",
-                    pointColor: "rgba(220,220,220,1)",
-                    pointStrokeColor: "#fff",
-                    data: stats.DailyDistances
-                  }
-                ]
-              };
-              var chart = new Chart(ctx).Bar(data, options);
+          $login.submit(function(e){
+            e.preventDefault();
+
+            load_data(true).done(function(stats){
+              $total.text("You have covered " + stats.Distance + " on your Citi Bike.");
+              $speed.text("Your average speed is " + stats.Speed + ".");
+              create_chart(stats.DailyDistances, stats.Days);
 
               $login.slideUp(200, function(){
                 $display.fadeIn();
                 $loading.fadeIn();
               });
 
-              $.ajax("/api/stats", {
-                type: "POST",
-                dataType: 'json',
-                data: JSON.stringify({Username: $username.val(), Password: $password.val()})
-              }).done(function(stats){
+              load_data(false).done(function(stats){
                 $total.text("You have covered " + stats.Distance + " on your Citi Bike.");
+                $speed.text("Your average speed is " + stats.Speed + ".");
+                create_chart(stats.DailyDistances, stats.Days);
                 $loading.text("up to date");
-                chart.datasets[0].data = stats.DailyDistances;
-                chart.labels = stats.Days;
-                chart.update();
               })
             });
           });
