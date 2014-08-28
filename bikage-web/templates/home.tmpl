@@ -16,35 +16,34 @@
       <div class="container">
         <div class="jumbotron col-md-8 col-md-offset-2">
           <h1>
-          	Bikage
-          	<small id="loading" style="display: none;">
-          	  <div id="loader">
-								<div id="d1"></div>
-								<div id="d2"></div>
-								<div id="d3"></div>
-								<div id="d4"></div>
-							</div>
-          	</small>
+            Bikage
+            <small id="loading" style="display: none;">
+              <div id="loader">
+                <div id="d1"></div>
+                <div id="d2"></div>
+                <div id="d3"></div>
+                <div id="d4"></div>
+              </div>
+            </small>
           </h1>
-          <p class="lead">
-            Check out how many miles you've covered on your Citi Bike!
-          </p>
-		
-				  <form id="login" role="form" action="#">
-						<div class="form-group">
-						  <input type="text" class="form-control" id="username" name="username" placeholder="Citibike Username">
-						</div>
-						<div class="form-group">
-						  <input type="password" class="form-control" id="password" name="password" placeholder="Citibike Password">
-						</div>
-						<button type="submit" class="btn btn-block btn-primary">Try it</button>
-					</form>
+          <form id="login" role="form" action="#">
+            <p class="lead">
+              Check out how many miles you've covered on your Citi Bike!
+            </p>
+            <div class="form-group">
+              <input type="text" class="form-control" id="username" name="username" placeholder="Citibike Username">
+            </div>
+            <div class="form-group">
+              <input type="password" class="form-control" id="password" name="password" placeholder="Citibike Password">
+            </div>
+            <button type="submit" class="btn btn-block btn-primary">Try it</button>
+          </form>
 
-					<div id="display" style="display: none;">
-						<p id="total"></p>
-						<canvas id="distances" width="660" height="400"></canvas>
-						<p class="legend"><i>Distance by day (km)</i></p>
-					</div>
+          <div id="display" style="display: none;">
+            <p id="total"></p>
+            <canvas id="distances" width="660" height="400"></canvas>
+            <p class="legend"><i>Distance by day (km)</i></p>
+          </div>
         </div>
       </div>
       <a href="https://github.com/Bowbaq/bikage">
@@ -53,68 +52,68 @@
 
       <script src="js/vendor/jquery-1.11.1.min.js"></script>
       <script src="js/vendor/Chart.min.js"></script>
-			<script>
-				$(document).ready(function(){
-					var $login = $("#login");
-					var $username = $("#username")
-					var $password = $("#password")
+      <script>
+        $(document).ready(function(){
+          var $login = $("#login");
+          var $username = $("#username")
+          var $password = $("#password")
 
-					var $display = $("#display");
-					var $loading = $("#loading")
-				  var $total = $("#total");
-					var $canvas = document.getElementById("distances");
-				  var ctx = $canvas.getContext("2d");
+          var $display = $("#display");
+          var $loading = $("#loading")
+          var $total = $("#total");
+          var $canvas = document.getElementById("distances");
+          var ctx = $canvas.getContext("2d");
 
-					var options = {
-						animation: false,
-				    scaleFontColor: "#fff",
-				    scaleLabel: "<%=value.slice(0, -1)%>"
-				  };
+          var options = {
+            animation: false,
+            scaleFontColor: "#fff",
+            scaleBeginAtZero: true
+          };
 
-					$login.submit(function(e){
-						e.preventDefault();
-  					
-  					$.ajax("/api/stats?cached=true", {
-  						type: "POST",
-  						dataType: 'json',
-  						data: JSON.stringify({Username: $username.val(), Password: $password.val()})
-  					}).done(function(stats){
-  						$total.text("You have covered " + stats.Distance + " on your Citi Bike.");
+          $login.submit(function(e){
+            e.preventDefault();
 
-  						var data = {
-						    labels: stats.Days,
-						    datasets: [
-						      {
-						        fillColor: "rgba(220,220,220,0.5)",
-						        strokeColor: "rgba(220,220,220,1)",
-						        pointColor: "rgba(220,220,220,1)",
-						        pointStrokeColor: "#fff",
-						        data: stats.DailyDistances
-						      }
-						    ]
-						  };
-						  var chart = new Chart(ctx).Bar(data, options);
-  						
-  						$login.slideUp(200, function(){
-						  	$display.fadeIn();
-						  	$loading.fadeIn();
-  						});
+            $.ajax("/api/stats?cached=true", {
+              type: "POST",
+              dataType: 'json',
+              data: JSON.stringify({Username: $username.val(), Password: $password.val()})
+            }).done(function(stats){
+              $total.text("You have covered " + stats.Distance + " on your Citi Bike.");
 
-  						$.ajax("/api/stats", {
-	  						type: "POST",
-	  						dataType: 'json',
-	  						data: JSON.stringify({Username: $username.val(), Password: $password.val()})
-	  					}).done(function(stats){
-	  						$total.text("You have covered " + stats.Distance + " on your Citi Bike.");
-	  						$loading.text("up to date");
-	  						chart.datasets[0].data = stats.DailyDistances;
-	  						chart.labels = stats.Days;
-	  						chart.update();
-	  					})
-  					});
-					});
-				});
-			</script>
+              var data = {
+                labels: stats.Days,
+                datasets: [
+                  {
+                    fillColor: "rgba(220,220,220,0.5)",
+                    strokeColor: "rgba(220,220,220,1)",
+                    pointColor: "rgba(220,220,220,1)",
+                    pointStrokeColor: "#fff",
+                    data: stats.DailyDistances
+                  }
+                ]
+              };
+              var chart = new Chart(ctx).Bar(data, options);
+
+              $login.slideUp(200, function(){
+                $display.fadeIn();
+                $loading.fadeIn();
+              });
+
+              $.ajax("/api/stats", {
+                type: "POST",
+                dataType: 'json',
+                data: JSON.stringify({Username: $username.val(), Password: $password.val()})
+              }).done(function(stats){
+                $total.text("You have covered " + stats.Distance + " on your Citi Bike.");
+                $loading.text("up to date");
+                chart.datasets[0].data = stats.DailyDistances;
+                chart.labels = stats.Days;
+                chart.update();
+              })
+            });
+          });
+        });
+      </script>
       <script>
         (function(b,o,i,l,e,r){b.GoogleAnalyticsObject=l;b[l]||(b[l]=
         function(){(b[l].q=b[l].q||[]).push(arguments)});b[l].l=+new Date;
