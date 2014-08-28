@@ -67,7 +67,6 @@ func (s *server) IndexHandler(r render.Render) {
 }
 
 func (s *server) StatsAPI(req *http.Request, r render.Render, creds credentials) {
-	log.Println(creds)
 	job := new_refresh_job(creds)
 	s.refresh <- job
 
@@ -139,7 +138,6 @@ func (s *server) refresh_trips() {
 
 		// return immediately if recently refreshed and not running
 		if exists && len(descriptor.requests) == 0 && time.Since(descriptor.last_run) < job_refresh_interval {
-			log.Println("cache is fresh")
 			job.done <- true
 			lock.Unlock()
 			continue
@@ -147,7 +145,6 @@ func (s *server) refresh_trips() {
 
 		// job is currently running, add request to the list, will be signaled on completion
 		if exists && len(descriptor.requests) > 0 {
-			log.Println("cache is being refreshed")
 			descriptor.requests = append(descriptor.requests, job)
 			lock.Unlock()
 			continue
