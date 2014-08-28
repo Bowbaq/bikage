@@ -47,7 +47,5 @@ func gzip_handler() martini.Handler {
 }
 
 func render_handler() martini.Handler {
-	return render.Renderer(render.Options{
-		Layout: "layout",
-	})
+	return render.Renderer(render.Options{})
 }

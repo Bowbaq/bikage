@@ -34,3 +34,61 @@ body {
 #distances {
   margin-left: -20px;
 }
+
+.container small {
+  display: inline-block;
+  position: relative;
+  color: #fff;
+  font-style: italic;
+}
+
+#loader {
+  display: block;
+  width: 100px;
+  height: 40px;
+  position: absolute;
+  top: -20px;
+}
+
+#loader div {
+  width: 20px;
+  height: 20px;
+  background: #FFF;
+  border-radius: 50%;
+  position: absolute;
+}
+
+#d1 {
+  -webkit-animation: loading_dots 1.2s linear infinite 0;
+     -moz-animation: loading_dots 1.2s linear infinite 0;
+       -o-animation: loading_dots 1.2s linear infinite 0;
+          animation: loading_dots 1.2s linear infinite 0;
+}
+#d2 {
+  -webkit-animation: loading_dots 1.2s linear infinite -.4s;
+     -moz-animation: loading_dots 1.2s linear infinite -.4s;
+       -o-animation: loading_dots 1.2s linear infinite -.4s;
+          animation: loading_dots 1.2s linear infinite -.4s;
+}
+#d3 {
+  -webkit-animation: loading_dots 1.2s linear infinite -.8s;
+     -moz-animation: loading_dots 1.2s linear infinite -.8s;
+       -o-animation: loading_dots 1.2s linear infinite -.8s;
+          animation: loading_dots 1.2s linear infinite -.8s;
+}
+
+#d4 {
+  -webkit-animation: loading_dots 1.2s linear infinite -1.2s;
+     -moz-animation: loading_dots 1.2s linear infinite -1.2s;
+       -o-animation: loading_dots 1.2s linear infinite -1.2s;
+          animation: loading_dots 1.2s linear infinite -1.2s;
+}
+
+@-webkit-keyframes loading_dots {
+  0% { left: 100px; top:0}
+  80% { left: 0; top:0;}
+  85% { left: 0; top: -20px; width: 20px; height: 20px;}
+  90% { width: 40px; height: 15px; }
+  95% { left: 100px; top: -20px; width: 20px; height: 20px;}
+  100% { left: 100px; top:0; }
+}

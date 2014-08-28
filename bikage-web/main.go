@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
+	"sync"
 	"time"
 
 	"github.com/Bowbaq/bikage"
@@ -15,18 +17,18 @@ func main() {
 	env := get_env()
 
 	server := new_server(env)
-	go server.RefreshTrips()
+	go server.refresh_trips()
 	server.Run(env)
 }
 
 type server struct {
 	bk      *bikage.Bikage
-	refresh chan credentials
+	refresh chan *refresh_job
 }
 
 type credentials struct {
-	Username string `form:"username" binding:"required"`
-	Password string `form:"password" binding:"required"`
+	Username string `binding:"required"`
+	Password string `binding:"required"`
 }
 
 func new_server(env Env) *server {
@@ -37,7 +39,7 @@ func new_server(env Env) *server {
 
 	return &server{
 		bk:      bikage,
-		refresh: make(chan credentials, 10),
+		refresh: make(chan *refresh_job, 10),
 	}
 }
 
@@ -53,9 +55,9 @@ func (s *server) Run(env Env) {
 	m.Use(render_handler())
 
 	m.Get("/", s.IndexHandler)
-	m.Post("/", binding.Form(credentials{}), s.StatsHandler)
 
-	m.Get("/api/trips", binding.Json(credentials{}), s.TripsAPI)
+	m.Post("/api/trips", binding.Json(credentials{}), s.TripsAPI)
+	m.Post("/api/stats", binding.Json(credentials{}), s.StatsAPI)
 
 	m.Run()
 }
@@ -64,17 +66,16 @@ func (s *server) IndexHandler(r render.Render) {
 	r.HTML(200, "home", nil)
 }
 
-func (s *server) StatsHandler(r render.Render, creds credentials, form_err binding.Errors) {
-	if form_err.Len() > 0 {
-		log.Println(form_err)
-		r.Error(400)
-		return
+func (s *server) StatsAPI(req *http.Request, r render.Render, creds credentials) {
+	log.Println(creds)
+	job := new_refresh_job(creds)
+	s.refresh <- job
+
+	if req.URL.Query().Get("cached") == "" {
+		<-job.done
 	}
 
-	trips := s.bk.GetCachedTrips(creds.Username)
-	s.refresh <- creds
-
-	stats := s.bk.ComputeStats(trips)
+	stats := s.bk.ComputeStats(s.bk.GetCachedTrips(creds.Username))
 
 	one_week_ago := time.Now().AddDate(0, 0, -6).Truncate(24 * time.Hour)
 	last_week_dists := make([]float64, 0)
@@ -99,32 +100,75 @@ func (s *server) StatsHandler(r render.Render, creds credentials, form_err bindi
 		Days:           last_week_days,
 	}
 
-	r.HTML(200, "stats", data)
+	r.JSON(200, data)
 }
 
 func (s *server) TripsAPI(r render.Render, creds credentials) {
-	trips, err := s.bk.GetTrips(creds.Username, creds.Password)
-	if err != nil {
-		r.Error(500)
-		return
-	}
+	job := new_refresh_job(creds)
+	s.refresh <- job
+	<-job.done
 
-	r.JSON(200, trips)
+	r.JSON(200, s.bk.GetCachedTrips(creds.Username))
 }
 
-func (s *server) RefreshTrips() {
-	jobs := make(map[string]time.Time)
+type refresh_job struct {
+	creds credentials
+	done  chan bool
+}
 
-	for creds := range s.refresh {
-		// Skip running / recently ran refreshes
-		if last_run, exist := jobs[creds.Username]; exist && time.Since(last_run) < 15*time.Minute {
+type job_descriptor struct {
+	last_run time.Time
+	requests []*refresh_job
+}
+
+const job_refresh_interval = 15 * time.Minute
+
+func new_refresh_job(creds credentials) *refresh_job {
+	return &refresh_job{creds, make(chan bool, 1)}
+}
+
+func (s *server) refresh_trips() {
+	var lock sync.Mutex
+	jobs := make(map[string]*job_descriptor)
+
+	for job := range s.refresh {
+		lock.Lock()
+		descriptor, exists := jobs[job.creds.Username]
+
+		// return immediately if recently refreshed and not running
+		if exists && len(descriptor.requests) == 0 && time.Since(descriptor.last_run) < job_refresh_interval {
+			log.Println("cache is fresh")
+			job.done <- true
+			lock.Unlock()
 			continue
 		}
 
-		log.Println("Refreshing trips for", creds.Username)
-		jobs[creds.Username] = time.Now()
+		// job is currently running, add request to the list, will be signaled on completion
+		if exists && len(descriptor.requests) > 0 {
+			log.Println("cache is being refreshed")
+			descriptor.requests = append(descriptor.requests, job)
+			lock.Unlock()
+			continue
+		}
+
+		// job needs to be run
+		jobs[job.creds.Username] = &job_descriptor{
+			last_run: time.Now(),
+			requests: []*refresh_job{job},
+		}
+		lock.Unlock()
+
 		go func() {
-			s.bk.GetTrips(creds.Username, creds.Password)
+			log.Println("Refreshing trips for", job.creds.Username)
+			s.bk.GetTrips(job.creds.Username, job.creds.Password)
+
+			lock.Lock()
+			adescriptor := jobs[job.creds.Username]
+			for _, req := range adescriptor.requests {
+				req.done <- true
+			}
+			adescriptor.requests = []*refresh_job{}
+			lock.Unlock()
 		}()
 	}
 }
