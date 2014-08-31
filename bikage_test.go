@@ -9,8 +9,8 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Bikage", func() {
-	Describe("computing stats", func() {
+var _ = Describe("bikage", func() {
+	Describe("ComputeStats()", func() {
 		route_api := test_route_api{}
 		trip_api := test_trip_api{}
 
@@ -19,21 +19,21 @@ var _ = Describe("Bikage", func() {
 			TripAPI:  &trip_api,
 		}
 
-		Context("with no trips", func() {
-			trips := Trips{}
+		var stats *Stats
 
-			It("should have a total distance of zero", func() {
-				stats := bk.ComputeStats(trips)
+		Context("without any trips", func() {
+			stats = bk.ComputeStats(Trips{})
+
+			It("returns 0 total miles biked", func() {
 				Expect(stats.Total).To(BeZero())
 			})
 
-			It("should have an empty map of daily totals", func() {
-				stats := bk.ComputeStats(trips)
+			It("has no dailt totals", func() {
 				Expect(stats.DailyTotal).To(HaveLen(0))
 			})
 		})
 
-		Context("with some trips", func() {
+		Context("with trips data", func() {
 			today := time.Now()
 			yesterday := today.AddDate(0, 0, -1)
 
@@ -50,32 +50,18 @@ var _ = Describe("Bikage", func() {
 						trip3: 2000,
 					}
 				}
+
+				stats = bk.ComputeStats(trips)
 			})
 
-			Context("stats.Total", func() {
-				It("should be the sum of the distances", func() {
-					stats := bk.ComputeStats(trips)
+			Describe("stats.Total", func() {
+				It("should contain the sum of the distance for each trip in meters", func() {
 					Expect(stats.Total).To(BeNumerically("==", 6000))
 				})
 			})
 
-			Context("stats.TotalKm()", func() {
-				It("should be the sum of the distances / 1000", func() {
-					stats := bk.ComputeStats(trips)
-					Expect(stats.TotalKm()).To(BeNumerically("==", 6))
-				})
-			})
-
-			Context("stats.TotalMi()", func() {
-				It("should be the sum of the distances / 1609.34", func() {
-					stats := bk.ComputeStats(trips)
-					Expect(stats.TotalMi()).To(BeNumerically("==", float64(6000)/1609.34))
-				})
-			})
-
-			Context("stats.DailyTotal", func() {
-				It("should have an entry with the sum for each day", func() {
-					stats := bk.ComputeStats(trips)
+			Describe("stats.DailyTotal", func() {
+				It("should have an entry with the distance in meters for each day", func() {
 					Expect(stats.DailyTotal).To(HaveKeyWithValue(yesterday.Format(DayFormat), BeNumerically("==", 1000)))
 					Expect(stats.DailyTotal).To(HaveKeyWithValue(today.Format(DayFormat), BeNumerically("==", 5000)))
 				})
@@ -83,6 +69,23 @@ var _ = Describe("Bikage", func() {
 
 			AfterEach(func() {
 				route_api.get_all = nil
+			})
+		})
+	})
+
+	Describe("Stats", func() {
+		stats := NewStats()
+		stats.Total = 5000
+
+		Describe("stats.TotalKm()", func() {
+			It("returns the total distance in kilometers", func() {
+				Expect(stats.TotalKm()).To(BeNumerically("==", 5))
+			})
+		})
+
+		Describe("stats.TotalMi()", func() {
+			It("returns the total distance in miles", func() {
+				Expect(stats.TotalMi()).To(BeNumerically("==", float64(5000)/1609.34))
 			})
 		})
 	})
