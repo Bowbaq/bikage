@@ -9,10 +9,7 @@ import (
 	"sync"
 )
 
-var (
-	distance_path = "./distances.json"
-	trip_path     = "./trips.json"
-)
+const cache_path = "./bikage_cache.json"
 
 type JsonCache struct {
 	distances map[string]uint64
@@ -35,10 +32,10 @@ func NewJsonCache() *JsonCache {
 
 func (c *JsonCache) GetDistance(route Route) (uint64, bool) {
 	c.RLock()
-	distance, ok := c.distances[make_key(route.From, route.To)]
+	distance, found := c.distances[make_key(route.From, route.To)]
 	c.RUnlock()
 
-	return distance, ok
+	return distance, found
 }
 
 func (c *JsonCache) PutDistance(route Route, distance uint64) {
@@ -51,21 +48,27 @@ func (c *JsonCache) PutDistance(route Route, distance uint64) {
 }
 
 func (c *JsonCache) GetTrip(username, id string) (Trip, bool) {
-	user_trips, hit := c.trips[username]
-	if !hit {
+	c.RLock()
+	user_trips, found := c.trips[username]
+	c.RUnlock()
+
+	if !found {
 		return Trip{}, false
 	}
 
-	trip, hit := user_trips[id]
+	trip, found := user_trips[id]
 
-	return trip, hit
+	return trip, found
 }
 
 func (c *JsonCache) GetTrips(username string) Trips {
 	trips := make(Trips, 0)
 
-	user_trips, hit := c.trips[username]
-	if !hit {
+	c.RLock()
+	user_trips, found := c.trips[username]
+	c.RUnlock()
+
+	if !found {
 		return trips
 	}
 
@@ -81,8 +84,8 @@ func (c *JsonCache) GetTrips(username string) Trips {
 func (c *JsonCache) PutTrip(username string, trip Trip) {
 	c.Lock()
 
-	_, hit := c.trips[username]
-	if !hit {
+	_, found := c.trips[username]
+	if !found {
 		c.trips[username] = make(map[string]Trip)
 	}
 
@@ -92,43 +95,34 @@ func (c *JsonCache) PutTrip(username string, trip Trip) {
 	c.Unlock()
 }
 
+type serialized struct {
+	Distances map[string]uint64
+	Trips     map[string]map[string]Trip
+}
+
 func (c *JsonCache) deserialize() {
-	data, err := ioutil.ReadFile(distance_path)
+	data, err := ioutil.ReadFile(cache_path)
 	if err != nil {
-		log.Println("JsonCache DESERIALIZE error ->", err)
+		log.Println("JsonCache READ error ->", err)
 		return
 	}
 
-	json.Unmarshal(data, &c.distances)
+	var cache serialized
+	json.Unmarshal(data, &cache)
 
-	data, err = ioutil.ReadFile(trip_path)
-	if err != nil {
-		log.Println("JsonCache DESERIALIZE error ->", err)
-		return
-	}
-
-	json.Unmarshal(data, &c.trips)
+	c.distances = cache.Distances
+	c.trips = cache.Trips
 }
 
 func (c *JsonCache) serialize() {
-	data, err := json.MarshalIndent(c.distances, "", "  ")
+	cache := serialized{c.distances, c.trips}
+	data, err := json.MarshalIndent(cache, "", "  ")
 	if err != nil {
-		log.Println(err)
+		log.Println("JsonCache MARSHALL error ->", err)
 		return
 	}
 
-	err = ioutil.WriteFile(distance_path, data, 0755)
-	if err != nil {
-		log.Println("JsonCache SERIALIZE error ->", err)
-	}
-
-	data, err = json.MarshalIndent(c.trips, "", "  ")
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	err = ioutil.WriteFile(trip_path, data, 0755)
+	err = ioutil.WriteFile(cache_path, data, 0755)
 	if err != nil {
 		log.Println("JsonCache SERIALIZE error ->", err)
 	}
