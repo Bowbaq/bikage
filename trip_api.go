@@ -231,9 +231,15 @@ func parse_station(node *goquery.Selection, stations Stations, id_attr string) (
 		if strings.Contains(id_attr, "end") {
 			index += 2
 		}
-		missing := node.Children().Eq(index).Text()
 
-		return Station{}, fmt.Errorf("Unknown station id: %d, %s", id, missing)
+		station_label := node.Children().Eq(index).Text()
+		for _, s := range stations {
+			if s.Label == station_label {
+				return s, nil
+			}
+		}
+
+		return Station{}, fmt.Errorf("Unknown station id: %d, %s", id, station_label)
 	}
 
 	return station, nil
