@@ -29,7 +29,7 @@ var _ = Describe("bikage", func() {
 			})
 
 			It("has no dailt totals", func() {
-				Expect(stats.DailyTotal).To(HaveLen(0))
+				Expect(stats.DailyDistanceTotal).To(HaveLen(0))
 			})
 		})
 
@@ -60,10 +60,10 @@ var _ = Describe("bikage", func() {
 				})
 			})
 
-			Describe("stats.DailyTotal", func() {
+			Describe("stats.DailyDistanceTotal", func() {
 				It("should have an entry with the distance in meters for each day", func() {
-					Expect(stats.DailyTotal).To(HaveKeyWithValue(yesterday.Format(DayFormat), BeNumerically("==", 1000)))
-					Expect(stats.DailyTotal).To(HaveKeyWithValue(today.Format(DayFormat), BeNumerically("==", 5000)))
+					Expect(stats.DailyDistanceTotal).To(HaveKeyWithValue(yesterday.Format(DayFormat), BeNumerically("==", 1000)))
+					Expect(stats.DailyDistanceTotal).To(HaveKeyWithValue(today.Format(DayFormat), BeNumerically("==", 5000)))
 				})
 			})
 

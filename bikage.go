@@ -16,7 +16,7 @@ type Bikage struct {
 	TripAPI  TripAPI
 }
 
-const DayFormat = "01/02/2006"
+const DayFormat = "01/02/2006 EST"
 
 func NewBikage(google_api_key string, mongo_url string) (*Bikage, error) {
 	stations, err := GetStations()
@@ -60,13 +60,20 @@ func (bk *Bikage) ComputeStats(trips Trips) *Stats {
 		}
 
 		day := trip.StartedAt.Format(DayFormat)
-		if day_total, ok := stats.DailyTotal[day]; ok {
-			stats.DailyTotal[day] = day_total + dist
+		if day_distance_total, ok := stats.DailyDistanceTotal[day]; ok {
+			stats.DailyDistanceTotal[day] = day_distance_total + dist
 		} else {
-			stats.DailyTotal[day] = dist
+			stats.DailyDistanceTotal[day] = dist
+		}
+
+		if day_speed_total, ok := stats.DailySpeedTotal[day]; ok {
+			stats.DailySpeedTotal[day] = day_speed_total + float64(dist)/trip.Duration().Hours()
+		} else {
+			stats.DailySpeedTotal[day] = float64(dist) / trip.Duration().Hours()
 		}
 
 		stats.Total += dist
+
 		stats.TotalTime += trip.Duration()
 	}
 
@@ -76,14 +83,15 @@ func (bk *Bikage) ComputeStats(trips Trips) *Stats {
 }
 
 type Stats struct {
-	Total      uint64
-	TotalTime  time.Duration
-	DailyTotal map[string]uint64
-	AvgSpeed   float64
+	Total              uint64
+	TotalTime          time.Duration
+	DailyDistanceTotal map[string]uint64
+	DailySpeedTotal    map[string]float64
+	AvgSpeed           float64
 }
 
 func NewStats() *Stats {
-	return &Stats{DailyTotal: make(map[string]uint64)}
+	return &Stats{DailyDistanceTotal: make(map[string]uint64), DailySpeedTotal: make(map[string]float64)}
 }
 
 func (s *Stats) TotalKm() float64 {
@@ -104,7 +112,7 @@ func mi_dist(dist uint64) float64 {
 
 func (s Stats) String() string {
 	summaries := make([]string, 0)
-	for day, dist := range s.DailyTotal {
+	for day, dist := range s.DailyDistanceTotal {
 		summary := fmt.Sprintf("  %s %.1f km (%.1f mi)", day, km_dist(dist), mi_dist(dist))
 		summaries = append(summaries, summary)
 	}
