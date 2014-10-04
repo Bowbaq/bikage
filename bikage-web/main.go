@@ -76,16 +76,22 @@ func (s *server) StatsAPI(req *http.Request, r render.Render, creds credentials)
 
 	stats := s.bk.ComputeStats(s.bk.GetCachedTrips(creds.Username))
 
-	one_week_ago := time.Now().AddDate(0, 0, -6).Truncate(24 * time.Hour)
-	last_week_dists := make([]float64, 0)
-	last_week_days := make([]string, 0)
+	one_month_ago := time.Now().AddDate(0, 0, -30).Truncate(24 * time.Hour)
+	last_month_dists := make([]float64, 0)
+	last_month_speeds := make([]float64, 0)
+	last_month_days := make([]string, 0)
 
-	for day := one_week_ago; day.Before(time.Now()); day = day.AddDate(0, 0, 1) {
-		last_week_days = append(last_week_days, day.Format("Jan 02"))
-		if daily_dist, ok := stats.DailyTotal[day.Format("01/02/2006")]; ok {
-			last_week_dists = append(last_week_dists, float64(daily_dist)/1000)
+	for day := one_month_ago; day.Before(time.Now()); day = day.AddDate(0, 0, 1) {
+		last_month_days = append(last_month_days, day.Format("Jan 02"))
+		if daily_dist, ok := stats.DailyDistanceTotal[day.Format("01/02/2006 EST")]; ok {
+			last_month_dists = append(last_month_dists, float64(daily_dist)/1000)
 		} else {
-			last_week_dists = append(last_week_dists, 0)
+			last_month_dists = append(last_month_dists, 0)
+		}
+		if daily_speed, ok := stats.DailySpeedTotal[day.Format("01/02/2006 EST")]; ok {
+			last_month_speeds = append(last_month_speeds, float64(daily_speed)/1000)
+		} else {
+			last_month_speeds = append(last_month_speeds, 0)
 		}
 	}
 
@@ -93,12 +99,14 @@ func (s *server) StatsAPI(req *http.Request, r render.Render, creds credentials)
 		Distance       string
 		Speed          string
 		DailyDistances []float64
+		DailySpeeds    []float64
 		Days           []string
 	}{
 		Distance:       fmt.Sprintf("%.1f km (%.1f mi)", stats.TotalKm(), stats.TotalMi()),
 		Speed:          fmt.Sprintf("%.1f km/h (%.1f mph)", stats.AvgSpeed, stats.AvgSpeed/1.60934),
-		DailyDistances: last_week_dists,
-		Days:           last_week_days,
+		DailyDistances: last_month_dists,
+		DailySpeeds:    last_month_speeds,
+		Days:           last_month_days,
 	}
 
 	r.JSON(200, data)

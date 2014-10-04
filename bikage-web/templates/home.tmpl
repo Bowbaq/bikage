@@ -39,11 +39,16 @@
             <button type="submit" class="btn btn-block btn-primary">Try it</button>
           </form>
 
-          <div id="display" style="display: none;">
+          <div id="display_distance" style="display: none;">
             <p id="total"></p>
-            <p id="speed"></p>
             <canvas id="distances" width="660" height="400"></canvas>
             <p class="legend"><i>Distance by day (km)</i></p>
+          </div>
+
+          <div id="display_speed" style="display: none;">
+            <p id="speed"></p>
+            <canvas id="speeds" width="660" height="400"></canvas>
+            <p class="legend"><i>Avg Speed by day (km)</i></p>
           </div>
         </div>
       </div>
@@ -59,12 +64,15 @@
           var $username = $("#username")
           var $password = $("#password")
 
-          var $display = $("#display");
+          var $display_distance = $("#display_distance");
+          var $display_speed = $("#display_speed");
           var $loading = $("#loading")
           var $total = $("#total");
           var $speed = $("#speed");
-          var $canvas = document.getElementById("distances");
-          var ctx = $canvas.getContext("2d");
+          var $distance_canvas = document.getElementById("distances");
+          var $speed_canvas = document.getElementById("speeds");
+          var distance_ctx = $distance_canvas.getContext("2d");
+          var speed_ctx = $speed_canvas.getContext("2d");
 
           var options = {
             animation: false,
@@ -72,7 +80,7 @@
             scaleBeginAtZero: true
           };
 
-          function create_chart(distances, days){
+          function create_distance_chart(distances, days){
             var data = {
               labels: days,
               datasets: [
@@ -85,7 +93,23 @@
                 }
               ]
             };
-            new Chart(ctx).Bar(data, options);
+            new Chart(distance_ctx).Bar(data, options);
+          }
+
+          function create_speed_chart(speeds, days){
+            var data = {
+              labels: days,
+              datasets: [
+                {
+                  fillColor: "rgba(220,220,220,0.5)",
+                  strokeColor: "rgba(220,220,220,1)",
+                  pointColor: "rgba(220,220,220,1)",
+                  pointStrokeColor: "#fff",
+                  data: speeds
+                }
+              ]
+            };
+            new Chart(speed_ctx).Bar(data, options);
           }
 
           function load_data(cached) {
@@ -105,17 +129,20 @@
             load_data(true).done(function(stats){
               $total.text("You have covered " + stats.Distance + " on your Citi Bike.");
               $speed.text("Your average speed is " + stats.Speed + ".");
-              create_chart(stats.DailyDistances, stats.Days);
+              create_distance_chart(stats.DailyDistances, stats.Days);
+              create_speed_chart(stats.DailySpeeds, stats.Days);
 
               $login.slideUp(200, function(){
-                $display.fadeIn();
+                $display_distance.fadeIn();
+                $display_speed.fadeIn();
                 $loading.fadeIn();
               });
 
               load_data(false).done(function(stats){
                 $total.text("You have covered " + stats.Distance + " on your Citi Bike.");
                 $speed.text("Your average speed is " + stats.Speed + ".");
-                create_chart(stats.DailyDistances, stats.Days);
+                create_distance_chart(stats.DailyDistances, stats.Days);
+                create_speed_chart(stats.DailySpeeds, stats.Days);
                 $loading.text("up to date");
               })
             });
