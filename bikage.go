@@ -67,7 +67,7 @@ func (bk *Bikage) ComputeStats(trips Trips) *Stats {
 		}
 
 		if day_speed_total, ok := stats.DailySpeedTotal[day]; ok {
-			stats.DailySpeedTotal[day] = day_speed_total + float64(dist) / trip.Duration().Hours()
+			stats.DailySpeedTotal[day] = day_speed_total + float64(dist)/trip.Duration().Hours()
 		} else {
 			stats.DailySpeedTotal[day] = float64(dist) / trip.Duration().Hours()
 		}
@@ -83,11 +83,11 @@ func (bk *Bikage) ComputeStats(trips Trips) *Stats {
 }
 
 type Stats struct {
-	Total      		   uint64
-	TotalTime  		   time.Duration
+	Total              uint64
+	TotalTime          time.Duration
 	DailyDistanceTotal map[string]uint64
 	DailySpeedTotal    map[string]float64
-	AvgSpeed   		   float64
+	AvgSpeed           float64
 }
 
 func NewStats() *Stats {
