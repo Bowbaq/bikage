@@ -200,6 +200,7 @@ func (cb *citibike) get_all_trips(username string, cache TripCache, stations Sta
 		}
 
 		for _, trip := range trips {
+			log.Println("Caching", trip)
 			cache.PutTrip(username, trip)
 		}
 
