@@ -59,10 +59,10 @@ body {
 }
 
 #d1 {
-  -webkit-animation: loading_dots 1.2s linear infinite 0;
-     -moz-animation: loading_dots 1.2s linear infinite 0;
-       -o-animation: loading_dots 1.2s linear infinite 0;
-          animation: loading_dots 1.2s linear infinite 0;
+  -webkit-animation: loading_dots 1.2s linear infinite 0s;
+     -moz-animation: loading_dots 1.2s linear infinite 0s;
+       -o-animation: loading_dots 1.2s linear infinite 0s;
+          animation: loading_dots 1.2s linear infinite 0s;
 }
 #d2 {
   -webkit-animation: loading_dots 1.2s linear infinite -.4s;

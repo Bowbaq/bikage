@@ -146,6 +146,7 @@ func (s *server) refresh_trips() {
 
 		// return immediately if recently refreshed and not running
 		if exists && len(descriptor.requests) == 0 && time.Since(descriptor.last_run) < job_refresh_interval {
+			log.Println("Refresh ran recently for", job.creds.Username)
 			job.done <- true
 			lock.Unlock()
 			continue
@@ -153,6 +154,7 @@ func (s *server) refresh_trips() {
 
 		// job is currently running, add request to the list, will be signaled on completion
 		if exists && len(descriptor.requests) > 0 {
+			log.Println("Queuing signal for", job.creds.Username)
 			descriptor.requests = append(descriptor.requests, job)
 			lock.Unlock()
 			continue

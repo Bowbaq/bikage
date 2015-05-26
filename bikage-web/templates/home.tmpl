@@ -69,10 +69,9 @@
           var $loading = $("#loading")
           var $total = $("#total");
           var $speed = $("#speed");
-          var $distance_canvas = document.getElementById("distances");
-          var $speed_canvas = document.getElementById("speeds");
-          var distance_ctx = $distance_canvas.getContext("2d");
-          var speed_ctx = $speed_canvas.getContext("2d");
+
+          var distance_chart = new Chart(document.getElementById("distances").getContext("2d"));
+          var speed_chart = new Chart(document.getElementById("speeds").getContext("2d"));
 
           var options = {
             animation: false,
@@ -81,6 +80,7 @@
           };
 
           function create_distance_chart(distances, days){
+            console.log(distances, days)
             var data = {
               labels: days,
               datasets: [
@@ -93,7 +93,7 @@
                 }
               ]
             };
-            new Chart(distance_ctx).Bar(data, options);
+            distance_chart.Bar(data, options);
           }
 
           function create_speed_chart(speeds, days){
@@ -109,7 +109,7 @@
                 }
               ]
             };
-            new Chart(speed_ctx).Line(data, options);
+            speed_chart.Line(data, options);
           }
 
           function load_data(cached) {
