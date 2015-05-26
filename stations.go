@@ -9,6 +9,8 @@ import (
 
 const stations_endpoint = "http://www.citibikenyc.com/stations/json"
 
+type Stations map[string]Station
+
 type Station struct {
 	Id     uint64
 	Label  string  `json:"stationName"`
@@ -20,8 +22,6 @@ type Station struct {
 func (s Station) String() string {
 	return s.Label
 }
-
-type Stations map[uint64]Station
 
 func GetStations() (Stations, error) {
 	resp, err := http.Get(stations_endpoint)
@@ -40,7 +40,7 @@ func GetStations() (Stations, error) {
 	stations := make(Stations)
 	for _, s := range response.StationBeanList {
 		if s.Status == 1 { // Active station
-			stations[s.Id] = s
+			stations[s.Label] = s
 		}
 	}
 

@@ -1,6 +1,7 @@
 package bikage
 
 import (
+	"crypto/sha1"
 	"errors"
 	"fmt"
 	"log"
@@ -8,16 +9,14 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"sort"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
 
 const (
-	login_page = "https://www.citibikenyc.com/login"
-	trips_page = "https://www.citibikenyc.com/member/trips"
+	login_form     = "https://member.citibikenyc.com/profile/login"
+	login_endpoint = "https://member.citibikenyc.com/profile/login_check"
 )
 
 type TripAPI interface {
@@ -58,8 +57,8 @@ func (tc *trip_api) GetCachedTrips(username string) Trips {
 }
 
 type citibike struct {
-	http *http.Client
-	csrf string
+	http       *http.Client
+	trips_path string
 }
 
 func new_citibike(username, password string) (*citibike, error) {
@@ -72,12 +71,9 @@ func new_citibike(username, password string) (*citibike, error) {
 		http: &http.Client{Jar: jar},
 	}
 
-	err = cb.get_csrf()
-	if err != nil {
-		return nil, err
-	}
+	csrf, err := cb.get_csrf()
 
-	err = cb.login(username, password)
+	err = cb.login(username, password, csrf)
 	if err != nil {
 		return nil, err
 	}
@@ -85,8 +81,32 @@ func new_citibike(username, password string) (*citibike, error) {
 	return &cb, nil
 }
 
-func (cb *citibike) get_csrf() error {
-	resp, err := cb.http.Get(login_page)
+func (cb *citibike) get_csrf() (string, error) {
+	resp, err := cb.http.Get(login_form)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	doc, err := goquery.NewDocumentFromResponse(resp)
+	if err != nil {
+		return "", err
+	}
+
+	csrf, ok := doc.Find(`#loginPopupId input[name="_login_csrf_security_token"]`).Attr("value")
+	if !ok {
+		return "", errors.New("couldn't find csrf token")
+	}
+
+	return csrf, nil
+}
+
+func (cb *citibike) login(username, password, csrf string) error {
+	resp, err := cb.http.PostForm(login_endpoint, url.Values{
+		"_username":                  {username},
+		"_password":                  {password},
+		"_login_csrf_security_token": {csrf},
+	})
 	if err != nil {
 		return err
 	}
@@ -97,34 +117,17 @@ func (cb *citibike) get_csrf() error {
 		return err
 	}
 
-	csrf, ok := doc.Find("#login-form .hidden input").Attr("value")
+	trips_path, ok := doc.Find(".ed-profile-menu__link_trips a").Attr("href")
 	if !ok {
-		return errors.New("couldn't find csrf token")
+		return errors.New("couldn't find trips page link")
 	}
-
-	cb.csrf = csrf
+	cb.trips_path = trips_path
 
 	return nil
 }
 
-func (cb *citibike) login(username, password string) error {
-	resp, err := cb.http.PostForm(login_page, url.Values{
-		"ci_csrf_token":      {cb.csrf},
-		"subscriberUsername": {username},
-		"subscriberPassword": {password},
-		"login_submit":       {"Login"},
-	})
-	if err != nil {
-		return err
-	}
-
-	resp.Body.Close()
-
-	return nil
-}
-
-func (cb *citibike) get_trips(url string, stations Stations) (Trips, string, error) {
-	resp, err := cb.http.Get(url)
+func (cb *citibike) get_trips(path string, stations Stations) (Trips, string, error) {
+	resp, err := cb.http.Get("https://member.citibikenyc.com" + path)
 	if err != nil {
 		return nil, "", err
 	}
@@ -136,49 +139,44 @@ func (cb *citibike) get_trips(url string, stations Stations) (Trips, string, err
 	}
 
 	var trips Trips
-	doc.Find("#tripTable .trip").Each(func(i int, tr *goquery.Selection) {
-		trip_id, ok := tr.Attr("id")
-		if !ok {
-			return
-		}
-
-		start_station, err := parse_station(tr, stations, "data-start-station-id")
+	doc.Find(".ed-table__items .ed-table__item_trip").Each(func(i int, tr *goquery.Selection) {
+		start_station, err := parse_station(tr, stations, ".ed-table__item__info__sub-info_trip-start-station")
 		if err != nil {
-			log.Println("COULDN'T PARSE STATION", err)
+			log.Println("COULDN'T PARSE START STATION", err, path)
 			return
 		}
 
-		end_station, err := parse_station(tr, stations, "data-end-station-id")
+		end_station, err := parse_station(tr, stations, ".ed-table__item__info__sub-info_trip-end-station")
 		if err != nil {
-			log.Println("COULDN'T PARSE STATION", err)
+			log.Println("COULDN'T PARSE END STATION", err, path)
 			return
 		}
 
-		start_time, err := parse_time(tr, "data-start-timestamp")
+		start_time, err := parse_time(tr, ".ed-table__item__info__sub-info_trip-start-date")
 		if err != nil {
 			return
 		}
 
-		end_time, err := parse_time(tr, "data-end-timestamp")
+		end_time, err := parse_time(tr, ".ed-table__item__info__sub-info_trip-end-date")
 		if err != nil {
 			return
 		}
 
 		trip := Trip{
-			Id: trip_id,
+			Id: fmt.Sprintf("%x", sha1.Sum([]byte(fmt.Sprintf("%s-%s-%s-%s", start_station.Label, end_station.Label, start_time, end_time)))),
 			Route: Route{
 				From: start_station,
 				To:   end_station,
 			},
-			StartedAt: *start_time,
-			EndedAt:   *end_time,
+			StartedAt: start_time,
+			EndedAt:   end_time,
 		}
 
 		trips = append(trips, trip)
 	})
 
-	nav := doc.Find("nav.pagination a").FilterFunction(func(i int, link *goquery.Selection) bool {
-		return link.Text() == ">"
+	nav := doc.Find(".ed-paginated-navigation__container a").FilterFunction(func(i int, link *goquery.Selection) bool {
+		return link.Text() == "Older"
 	})
 
 	if nav.Size() == 0 {
@@ -213,53 +211,21 @@ func (cb *citibike) get_all_trips(username string, cache TripCache, stations Sta
 		return trips, nil
 	}
 
-	trips, err := fetch(trips_page)
+	trips, err := fetch(cb.trips_path)
 	sort.Sort(trips)
 
 	return trips, err
 }
 
-func parse_station(node *goquery.Selection, stations Stations, id_attr string) (Station, error) {
-	id, err := parse_uint64(node, id_attr)
-	if err != nil {
-		return Station{}, err
+func parse_station(node *goquery.Selection, stations Stations, name_div string) (Station, error) {
+	station_label := node.Find(name_div).Text()
+	if station, ok := stations[station_label]; ok {
+		return station, nil
 	}
 
-	station, found := stations[id]
-	if !found {
-		index := 1
-		if strings.Contains(id_attr, "end") {
-			index += 2
-		}
-
-		station_label := node.Children().Eq(index).Text()
-		for _, s := range stations {
-			if s.Label == station_label {
-				return s, nil
-			}
-		}
-
-		return Station{}, fmt.Errorf("Unknown station id: %d, %s", id, station_label)
-	}
-
-	return station, nil
+	return Station{}, fmt.Errorf("Unknown station: %s", station_label)
 }
 
-func parse_uint64(node *goquery.Selection, attr string) (uint64, error) {
-	uint64_str, ok := node.Attr(attr)
-	if !ok {
-		return 0, errors.New("attribute " + attr + " does not exist")
-	}
-
-	return strconv.ParseUint(uint64_str, 10, 64)
-}
-
-func parse_time(node *goquery.Selection, attr string) (*time.Time, error) {
-	time_sec, err := parse_uint64(node, attr)
-	if err != nil {
-		return nil, err
-	}
-
-	time := time.Unix(int64(time_sec), 0)
-	return &time, nil
+func parse_time(node *goquery.Selection, time_div string) (time.Time, error) {
+	return time.Parse("01/02/2006 3:04:05 PM", node.Find(time_div).Text())
 }
