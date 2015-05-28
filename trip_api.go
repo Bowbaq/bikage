@@ -9,8 +9,12 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"sort"
+	"strconv"
+	"strings"
+	"sync"
 	"time"
 
+	"github.com/Bowbaq/pool"
 	"github.com/PuerkitoBio/goquery"
 )
 
@@ -43,32 +47,34 @@ func (ta *trip_api) WithCache(cache TripCache) TripAPI {
 	return ta
 }
 
-func (tc *trip_api) GetTrips(username, password string) (Trips, error) {
-	citibike, err := new_citibike(username, password)
+func (ta *trip_api) GetTrips(username, password string) (Trips, error) {
+	citibike, err := new_citibike(username, password, &ta.stations)
 	if err != nil {
 		return nil, err
 	}
 
-	return citibike.get_all_trips(username, tc.cache, tc.stations)
+	return citibike.get_all_trips(username, ta.cache)
 }
 
-func (tc *trip_api) GetCachedTrips(username string) Trips {
-	return tc.cache.GetTrips(username)
+func (ta *trip_api) GetCachedTrips(username string) Trips {
+	return ta.cache.GetTrips(username)
 }
 
 type citibike struct {
 	http       *http.Client
+	stations   *Stations
 	trips_path string
 }
 
-func new_citibike(username, password string) (*citibike, error) {
+func new_citibike(username, password string, stations *Stations) (*citibike, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, err
 	}
 
 	cb := citibike{
-		http: &http.Client{Jar: jar},
+		http:     &http.Client{Jar: jar},
+		stations: stations,
 	}
 
 	csrf, err := cb.get_csrf()
@@ -126,29 +132,105 @@ func (cb *citibike) login(username, password, csrf string) error {
 	return nil
 }
 
-func (cb *citibike) get_trips(path string, stations Stations) (Trips, string, error) {
+type fetchTrips struct {
+	wg   *sync.WaitGroup
+	page int
+	cb   *citibike
+}
+
+var tripPool = pool.NewRateLimitedPool(10, 20, 10, func(id uint, payload interface{}) interface{} {
+	job := payload.(fetchTrips)
+	defer job.wg.Done()
+
+	doc, err := job.cb.get_trips_document(job.cb.trips_path + "?pageNumber=" + strconv.Itoa(job.page))
+	if err != nil {
+		return err
+	}
+
+	return job.cb.parse_trips(doc)
+})
+
+func (cb *citibike) get_all_trips(username string, cache TripCache) (Trips, error) {
+	doc, err := cb.get_trips_document(cb.trips_path)
+	if err != nil {
+		return nil, err
+	}
+
+	next_page, last_page := parse_navigation(doc, cb.trips_path)
+
+	var wg sync.WaitGroup
+	wg.Add(last_page - next_page + 1)
+
+	var jobs []pool.Job
+	for p := next_page; p <= last_page; p++ {
+		job := pool.NewJob(fetchTrips{&wg, p, cb})
+		tripPool.Submit(job)
+		jobs = append(jobs, job)
+	}
+	wg.Wait()
+
+	trips := cb.parse_trips(doc)
+	for _, job := range jobs {
+		result := job.Result()
+		switch result.(type) {
+		case Trips:
+			trips = append(trips, result.(Trips)...)
+		case error:
+			return trips, result.(error)
+		default:
+			return trips, errors.New("Unexpected return type from the pool")
+		}
+	}
+
+	sort.Sort(trips)
+	for _, trip := range trips {
+		cache.PutTrip(username, trip)
+	}
+
+	return trips, nil
+}
+
+func (cb *citibike) get_trips_document(path string) (*goquery.Document, error) {
 	resp, err := cb.http.Get("https://member.citibikenyc.com" + path)
 	if err != nil {
-		return nil, "", err
-	}
-	defer resp.Body.Close()
-
-	doc, err := goquery.NewDocumentFromResponse(resp)
-	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
+	return goquery.NewDocumentFromResponse(resp)
+}
+
+func parse_navigation(doc *goquery.Document, trips_path string) (int, int) {
+	next, nok := doc.Find(".ed-paginated-navigation__pages-group__link_next").Attr("href")
+	last, lok := doc.Find(".ed-paginated-navigation__pages-group__link_last").Attr("href")
+	if !nok || !lok {
+		return 1, 1
+	}
+
+	next_str := strings.TrimPrefix(next, trips_path+"?pageNumber=")
+	last_str := strings.TrimPrefix(last, trips_path+"?pageNumber=")
+
+	next_page, nerr := strconv.Atoi(next_str)
+	last_page, lerr := strconv.Atoi(last_str)
+	if nerr != nil || lerr != nil {
+		return 1, 1
+	}
+
+	return next_page, last_page
+}
+
+func (cb *citibike) parse_trips(doc *goquery.Document) Trips {
 	var trips Trips
+
 	doc.Find(".ed-table__items .ed-table__item_trip").Each(func(i int, tr *goquery.Selection) {
-		start_station, err := parse_station(tr, stations, ".ed-table__item__info__sub-info_trip-start-station")
+		start_station, err := cb.parse_station(tr, ".ed-table__item__info__sub-info_trip-start-station")
 		if err != nil {
-			log.Println("COULDN'T PARSE START STATION", err, path)
+			log.Println("COULDN'T PARSE START STATION", err)
 			return
 		}
 
-		end_station, err := parse_station(tr, stations, ".ed-table__item__info__sub-info_trip-end-station")
+		end_station, err := cb.parse_station(tr, ".ed-table__item__info__sub-info_trip-end-station")
 		if err != nil {
-			log.Println("COULDN'T PARSE END STATION", err, path)
+			log.Println("COULDN'T PARSE END STATION", err)
 			return
 		}
 
@@ -175,52 +257,12 @@ func (cb *citibike) get_trips(path string, stations Stations) (Trips, string, er
 		trips = append(trips, trip)
 	})
 
-	nav := doc.Find(".ed-paginated-navigation__container a").FilterFunction(func(i int, link *goquery.Selection) bool {
-		return link.Text() == "Older"
-	})
-
-	if nav.Size() == 0 {
-		return trips, "", nil
-	}
-
-	next_page, ok := nav.Last().Attr("href")
-	if !ok {
-		return trips, "", nil
-	}
-
-	return trips, next_page, nil
+	return trips
 }
 
-func (cb *citibike) get_all_trips(username string, cache TripCache, stations Stations) (Trips, error) {
-	var fetch func(string) (Trips, error)
-	fetch = func(page string) (Trips, error) {
-		trips, next_page, err := cb.get_trips(page, stations)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, trip := range trips {
-			log.Println("Caching", trip)
-			cache.PutTrip(username, trip)
-		}
-
-		if next_page != "" {
-			next_trips, err := fetch(next_page)
-			return append(trips, next_trips...), err
-		}
-
-		return trips, nil
-	}
-
-	trips, err := fetch(cb.trips_path)
-	sort.Sort(trips)
-
-	return trips, err
-}
-
-func parse_station(node *goquery.Selection, stations Stations, name_div string) (Station, error) {
+func (cb *citibike) parse_station(node *goquery.Selection, name_div string) (Station, error) {
 	station_label := node.Find(name_div).Text()
-	if station, ok := stations[station_label]; ok {
+	if station, ok := (*cb.stations)[station_label]; ok {
 		return station, nil
 	}
 
