@@ -32,7 +32,7 @@ type credentials struct {
 }
 
 func new_server(env Env) *server {
-	bikage, err := bikage.NewBikage(env["GOOGLE_APIKEY"], env["MONGOHQ_URL"])
+	bikage, err := bikage.NewBikage(env["GOOGLE_APIKEY"], env["MONGODB_URI"])
 	if err != nil {
 		panic(err)
 	}
